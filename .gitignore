@@ -1,0 +1,21 @@
+# env
+.env
+.env.*
+!.env.example
+
+# Claude Code (dev tooling — not part of the project)
+CLAUDE.md
+**/CLAUDE.md
+.claude/*
+!.claude/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# misc
+*.pem
+
+# Internal docs
+docs/internal/
+
