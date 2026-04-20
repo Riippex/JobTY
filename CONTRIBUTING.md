@@ -63,7 +63,7 @@ Use the [Feature Request](.github/ISSUE_TEMPLATE/feature_request.md) template.
 ### Steps
 
 ```bash
-git clone https://github.com/Rapd33/JobTY.git
+git clone https://github.com/Riippex/JobTY.git
 cd JobTY
 cp .env.example .env
 # Fill in your .env (LLM_PROVIDER + SECRET_KEY at minimum)
@@ -141,4 +141,4 @@ See `back/app/plugins/linkedin.py` as a reference implementation.
 
 ## Questions?
 
-Open a [GitHub Discussion](https://github.com/Rapd33/JobTY/discussions) — issues are for bugs and features only.
+Open a [GitHub Discussion](https://github.com/Riippex/JobTY/discussions) — issues are for bugs and features only.
