@@ -53,7 +53,7 @@ JobTY is an open-source autonomous AI agent that automates your job search end-t
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/Rapd33/JobTY.git
+git clone https://github.com/Riippex/JobTY.git
 cd JobTY
 ```
 
