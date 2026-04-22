@@ -5,7 +5,7 @@ Results are cached in the companies table and refreshed after 7 days.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -97,8 +97,8 @@ async def research_company(domain: str, db: AsyncSession) -> CompanyResearch:
     company_row = result.scalar_one_or_none()
 
     if company_row is not None:
-        age = datetime.now(timezone.utc) - company_row.researched_at.replace(
-            tzinfo=timezone.utc
+        age = datetime.now(UTC) - company_row.researched_at.replace(
+            tzinfo=UTC
         )
         if age < timedelta(days=CACHE_TTL_DAYS):
             logger.debug(
@@ -117,7 +117,7 @@ async def research_company(domain: str, db: AsyncSession) -> CompanyResearch:
         prompt, CompanyResearch, system=_SYSTEM_PROMPT
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     serialised = research.model_dump()
 
     if company_row is None:

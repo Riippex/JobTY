@@ -18,10 +18,9 @@ Environment variables:
     APPLY_SCORE_THRESHOLD     — minimum score to apply (default 70)
 """
 
-import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from sqlalchemy import select
@@ -107,7 +106,7 @@ async def _broadcast(event: dict) -> None:
 
 
 def _ts() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +452,7 @@ async def _persist_application(
     )
     job_row = result.scalar_one_or_none()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if job_row is None:
         job_row = Job(
             profile_id=profile.id,

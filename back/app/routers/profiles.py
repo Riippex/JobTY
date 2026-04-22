@@ -1,5 +1,6 @@
 import hashlib
 import shutil
+from datetime import UTC
 from pathlib import Path
 
 import aiofiles
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.db import CVCache, Profile
-from app.models.profile import CVInfo, JobPreferences, ProfileCreate, ProfileResponse, ProfileUpdate
+from app.models.profile import CVInfo, ProfileCreate, ProfileResponse, ProfileUpdate
 
 router = APIRouter(tags=["profiles"])
 
@@ -155,21 +156,21 @@ async def upload_cv(
     cache_row = existing_cache.scalar_one_or_none()
 
     if cache_row is None:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         cache_row = CVCache(
             profile_id=profile.id,
             pdf_hash=pdf_hash,
             parsed_json={},
-            parsed_at=datetime.now(timezone.utc),
+            parsed_at=datetime.now(UTC),
         )
         db.add(cache_row)
     else:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         cache_row.pdf_hash = pdf_hash
         cache_row.parsed_json = {}
-        cache_row.parsed_at = datetime.now(timezone.utc)
+        cache_row.parsed_at = datetime.now(UTC)
 
     await db.commit()
 

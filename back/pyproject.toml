@@ -1,0 +1,13 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = [
+  "E501",   # line too long — handled by formatter
+  "UP007",  # X | Y union syntax — keep Optional for clarity in some places
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/plugins/*" = ["E402"]  # imports not at top (lazy playwright imports)

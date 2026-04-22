@@ -5,10 +5,9 @@ No other module may import openai, groq, or ollama directly.
 Everything goes through the `llm_provider` singleton exposed at the bottom.
 """
 
-import json
 import logging
 import os
-from enum import Enum
+from enum import StrEnum
 
 import httpx
 from pydantic import BaseModel
@@ -16,7 +15,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 
-class LLMProviderName(str, Enum):
+class LLMProviderName(StrEnum):
     OPENAI = "openai"
     GROQ = "groq"
     OLLAMA = "ollama"

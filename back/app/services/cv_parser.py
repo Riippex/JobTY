@@ -7,7 +7,7 @@ LLM is never called twice for the same file.
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pdfplumber
@@ -150,7 +150,7 @@ async def parse_cv(profile_name: str, db: AsyncSession) -> CVParsed:
     serialised = parsed.model_dump()
     serialised["parsed"] = True  # flag checked by profiles router
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Upsert: if a row exists for this profile (different hash), update it
     existing_result = await db.execute(

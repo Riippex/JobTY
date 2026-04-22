@@ -19,7 +19,7 @@ import os
 import random
 from pathlib import Path
 
-from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+from playwright.async_api import Browser, Page, async_playwright
 
 from app.plugins.base_board import BaseJobBoard, CaptchaDetectedError, JobListing
 
