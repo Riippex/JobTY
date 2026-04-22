@@ -27,6 +27,10 @@ class ProfileResponse(BaseModel):
     created_at: datetime
 
 
+class ProfileUpdate(BaseModel):
+    preferences: JobPreferences | None = None
+
+
 class CVInfo(BaseModel):
     profile_name: str
     filename: str

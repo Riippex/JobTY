@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.db import CVCache, Profile
-from app.models.profile import CVInfo, JobPreferences, ProfileCreate, ProfileResponse
+from app.models.profile import CVInfo, JobPreferences, ProfileCreate, ProfileResponse, ProfileUpdate
 
 router = APIRouter(tags=["profiles"])
 
@@ -85,6 +85,20 @@ async def delete_profile(name: str, db: AsyncSession = Depends(get_db)) -> None:
     profile_dir = _profile_dir(name)
     if profile_dir.exists():
         shutil.rmtree(profile_dir)
+
+
+@router.patch("/{name}", response_model=ProfileResponse)
+async def update_profile(
+    name: str,
+    payload: ProfileUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> ProfileResponse:
+    profile = await _get_profile_by_name(name, db)
+    if payload.preferences is not None:
+        profile.preferences = payload.preferences.model_dump()
+    await db.commit()
+    await db.refresh(profile)
+    return ProfileResponse.model_validate(profile)
 
 
 @router.put("/{name}/activate", response_model=ProfileResponse)
