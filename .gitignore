@@ -16,6 +16,12 @@ Thumbs.db
 # misc
 *.pem
 
+# Data — user-specific, never commit
+*.db
+*.db-shm
+*.db-wal
+back/data/
+
 # Internal docs
 docs/internal/
 
