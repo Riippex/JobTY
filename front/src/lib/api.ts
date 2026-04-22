@@ -26,13 +26,16 @@ export interface Preferences {
   keywords: string[];
   locations: string[];
   remote_only: boolean;
-  max_applications: number;
+  min_salary: number | null;
+  max_applications_per_run: number;
+  job_types: string[];
 }
 
 export interface Profile {
+  id: number;
   name: string;
   preferences: Preferences;
-  active: boolean;
+  is_active: boolean;
   created_at?: string;
 }
 
@@ -129,6 +132,40 @@ export function startAgent(profile_name: string): Promise<{ ok: boolean }> {
 
 export function stopAgent(): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>("/agent/stop", { method: "POST" });
+}
+
+// ---- Settings ----
+
+export interface Settings {
+  llm_provider: "openai" | "groq" | "anthropic" | "gemini" | "ollama";
+  openai_api_key: string;
+  openai_model: string;
+  groq_api_key: string;
+  groq_model: string;
+  anthropic_api_key: string;
+  anthropic_model: string;
+  gemini_api_key: string;
+  gemini_model: string;
+  ollama_base_url: string;
+  ollama_model: string;
+  playwright_headless: boolean;
+  playwright_slow_mo: number;
+  playwright_timeout: number;
+  max_applications_per_run: number;
+  enabled_boards: string[];
+  linkedin_email: string;
+  linkedin_password: string;
+}
+
+export function fetchSettings(): Promise<Settings> {
+  return apiFetch<Settings>("/settings");
+}
+
+export function updateSettings(data: Partial<Settings>): Promise<Settings> {
+  return apiFetch<Settings>("/settings", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 }
 
 // ---- Jobs (optional endpoint) ----

@@ -12,7 +12,9 @@ const DEFAULT_PREFERENCES: Preferences = {
   keywords: [],
   locations: [],
   remote_only: false,
-  max_applications: 10,
+  min_salary: null,
+  max_applications_per_run: 10,
+  job_types: [],
 };
 
 export default function SetupWizard() {
@@ -281,6 +283,7 @@ export default function SetupWizard() {
                   ref={fileInputRef}
                   type="file"
                   accept="application/pdf"
+                  aria-label="Upload CV PDF"
                   className="hidden"
                   onChange={handleFileChange}
                 />
@@ -484,6 +487,9 @@ export default function SetupWizard() {
                   </p>
                 </div>
                 <button
+                  type="button"
+                  aria-label="Toggle remote only"
+                  aria-pressed={preferences.remote_only ? "true" : "false"}
                   onClick={() =>
                     setPreferences((p) => ({ ...p, remote_only: !p.remote_only }))
                   }
@@ -513,18 +519,19 @@ export default function SetupWizard() {
                     className="text-sm font-bold"
                     style={{ color: "var(--accent)" }}
                   >
-                    {preferences.max_applications}
+                    {preferences.max_applications_per_run}
                   </span>
                 </div>
                 <input
                   type="range"
+                  aria-label="Max applications per run"
                   min={1}
                   max={50}
-                  value={preferences.max_applications}
+                  value={preferences.max_applications_per_run}
                   onChange={(e) =>
                     setPreferences((p) => ({
                       ...p,
-                      max_applications: Number(e.target.value),
+                      max_applications_per_run: Number(e.target.value),
                     }))
                   }
                   className="w-full accent-green-500 h-1.5 rounded-full appearance-none cursor-pointer"

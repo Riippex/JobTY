@@ -80,7 +80,7 @@ export function useProfiles(): UseProfilesResult {
     [load]
   );
 
-  const activeProfile = profiles.find((p) => p.active) ?? null;
+  const activeProfile = profiles.find((p) => p.is_active) ?? null;
 
   return {
     profiles,

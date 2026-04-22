@@ -8,7 +8,7 @@ on:
 
 jobs:
   backend-lint:
-    name: Backend — lint
+    name: Backend lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
         run: ruff check back/app/
 
   frontend-build:
-    name: Frontend — typecheck & build
+    name: Frontend typecheck and build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

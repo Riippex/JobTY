@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/api";
 
@@ -127,18 +128,24 @@ export default function Sidebar({
         </ul>
       </div>
 
-      {/* New Profile */}
+      {/* Settings + New Profile */}
       <div
-        className="px-3 py-3 border-t"
+        className="px-3 py-3 border-t space-y-2"
         style={{ borderColor: "var(--border)" }}
       >
+        <Link
+          href="/settings"
+          className="w-full text-sm font-medium py-2 px-3 rounded-lg flex items-center gap-2 transition-colors hover:bg-white/5"
+          style={{ color: "var(--text-secondary)" }}
+        >
+          <span>⚙</span>
+          <span>Settings</span>
+        </Link>
         <button
+          type="button"
           onClick={() => router.push("/setup")}
           className="w-full text-sm font-medium py-2 px-3 rounded-lg border border-dashed transition-colors hover:border-green-500/60 hover:text-green-400"
-          style={{
-            borderColor: "var(--border)",
-            color: "var(--text-secondary)",
-          }}
+          style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
         >
           + New Profile
         </button>

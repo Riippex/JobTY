@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.routers import cv
+from app.routers import settings as settings_router
 from app.routers.agent import router as agent_router
 from app.routers.profiles import router as profiles_router
 
@@ -70,6 +71,7 @@ app.add_middleware(
 app.include_router(profiles_router, prefix="/profiles")
 app.include_router(cv.router, prefix="/cv", tags=["cv"])
 app.include_router(agent_router, prefix="/agent")
+app.include_router(settings_router.router, prefix="/settings", tags=["settings"])
 
 
 # ---------------------------------------------------------------------------

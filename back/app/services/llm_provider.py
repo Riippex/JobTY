@@ -6,11 +6,12 @@ Everything goes through the `llm_provider` singleton exposed at the bottom.
 """
 
 import logging
-import os
 from enum import StrEnum
 
 import httpx
 from pydantic import BaseModel
+
+from app.services import config_store
 
 logger = logging.getLogger(__name__)
 
@@ -41,45 +42,45 @@ class LLMProvider:
     """Unified async interface for OpenAI, Groq, Ollama, Anthropic, and Gemini."""
 
     def __init__(self) -> None:
-        raw = os.getenv("LLM_PROVIDER", "openai").lower()
+        raw = str(config_store.get("llm_provider") or "openai").lower()
         try:
             self._provider = LLMProviderName(raw)
         except ValueError:
             raise ValueError(
-                f"Unknown LLM_PROVIDER='{raw}'. Must be one of: openai, groq, ollama, anthropic, gemini"
+                f"Unknown llm_provider='{raw}'. Must be one of: openai, groq, ollama, anthropic, gemini"
             )
 
         if self._provider == LLMProviderName.OPENAI:
             import openai  # noqa: PLC0415
 
-            self._client = openai.AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
-            self._model = os.getenv("OPENAI_MODEL", "gpt-4.1")
+            self._client = openai.AsyncOpenAI(api_key=str(config_store.get("openai_api_key")))
+            self._model = str(config_store.get("openai_model") or "gpt-4.1")
             self._timeout = 30.0
 
         elif self._provider == LLMProviderName.GROQ:
             import groq  # noqa: PLC0415
 
-            self._client = groq.AsyncGroq(api_key=os.environ["GROQ_API_KEY"])
-            self._model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+            self._client = groq.AsyncGroq(api_key=str(config_store.get("groq_api_key")))
+            self._model = str(config_store.get("groq_model") or "llama-3.3-70b-versatile")
             self._timeout = 30.0
 
         elif self._provider == LLMProviderName.ANTHROPIC:
             import anthropic  # noqa: PLC0415
 
-            self._client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-            self._model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+            self._client = anthropic.AsyncAnthropic(api_key=str(config_store.get("anthropic_api_key")))
+            self._model = str(config_store.get("anthropic_model") or "claude-sonnet-4-6")
             self._timeout = 30.0
 
         elif self._provider == LLMProviderName.GEMINI:
             import google.generativeai as genai  # noqa: PLC0415
 
-            genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-            self._model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+            genai.configure(api_key=str(config_store.get("gemini_api_key")))
+            self._model = str(config_store.get("gemini_model") or "gemini-2.5-flash")
             self._timeout = 30.0
 
         else:  # ollama
-            self._base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            self._model = os.getenv("OLLAMA_MODEL", "llama3")
+            self._base_url = str(config_store.get("ollama_base_url") or "http://localhost:11434")
+            self._model = str(config_store.get("ollama_model") or "llama3")
             self._timeout = 120.0
 
     async def complete(self, prompt: str, system: str = "") -> str:
@@ -224,3 +225,9 @@ def get_llm_provider() -> LLMProvider:
     if _instance is None:
         _instance = LLMProvider()
     return _instance
+
+
+def reset_provider() -> None:
+    """Force re-initialization on next get_llm_provider() call."""
+    global _instance
+    _instance = None
