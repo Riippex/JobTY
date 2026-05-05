@@ -11,6 +11,50 @@ interface JobFeedProps {
   activeProfileName: string | null;
 }
 
+// ── Icons ─────────────────────────────────────────────────────────────────────
+
+function IconPerson() {
+  return (
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-3.866 3.582-7 8-7s8 3.134 8 7" />
+    </svg>
+  );
+}
+
+function IconSearch() {
+  return (
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.35-4.35" />
+    </svg>
+  );
+}
+
+function IconClipboard() {
+  return (
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
+
+function IconSkip() {
+  return (
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <polygon points="5 4 15 12 5 20 5 4" />
+      <line x1="19" y1="5" x2="19" y2="19" />
+    </svg>
+  );
+}
+
+// ── Badges ────────────────────────────────────────────────────────────────────
+
 function ScoreBadge({ score }: { score: number }) {
   let colorClass = "text-red-400 bg-red-500/10";
   if (score >= 70) colorClass = "text-green-400 bg-green-500/10";
@@ -32,13 +76,13 @@ function StatusBadge({ status }: { status: Job["status"] }) {
   };
 
   return (
-    <span
-      className={`text-xs capitalize px-2 py-0.5 rounded-full ${styles[status]}`}
-    >
+    <span className={`text-xs capitalize px-2 py-0.5 rounded-full ${styles[status]}`}>
       {status}
     </span>
   );
 }
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function JobFeed({ activeProfileName }: JobFeedProps) {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -58,7 +102,6 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
       const data = await fetchJobs(activeProfileName);
       setJobs(data);
     } catch (err) {
-      // 404 is expected if /jobs endpoint isn't implemented yet
       if (err instanceof Error && err.message.startsWith("404")) {
         setJobs([]);
       } else {
@@ -74,9 +117,7 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
   }, [load]);
 
   const filters: FilterType[] = ["all", "applied", "skipped", "pending", "error"];
-
-  const filtered =
-    filter === "all" ? jobs : jobs.filter((j) => j.status === filter);
+  const filtered = filter === "all" ? jobs : jobs.filter((j) => j.status === filter);
 
   if (!activeProfileName) {
     return (
@@ -84,7 +125,9 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
         className="flex flex-col items-center justify-center rounded-xl border py-16 text-center"
         style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
       >
-        <p className="text-2xl mb-3">👤</p>
+        <span style={{ color: "var(--text-muted)" }} className="mb-3">
+          <IconPerson />
+        </span>
         <p className="font-medium" style={{ color: "var(--text-primary)" }}>
           No active profile
         </p>
@@ -95,13 +138,16 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
     );
   }
 
+  function filterEmptyIcon() {
+    if (filter === "applied") return <IconClipboard />;
+    if (filter === "skipped") return <IconSkip />;
+    return <IconSearch />;
+  }
+
   return (
     <div
       className="flex flex-col rounded-xl border"
-      style={{
-        background: "var(--bg-card)",
-        borderColor: "var(--border)",
-      }}
+      style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
     >
       {/* Header */}
       <div
@@ -121,7 +167,7 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
         </div>
         <button
           onClick={() => void load()}
-          className="text-xs px-2 py-1 rounded transition-colors hover:bg-neutral-700"
+          className="text-xs px-2 py-1 rounded transition-colors hover:bg-(--hover-bg-strong)"
           style={{ color: "var(--text-muted)" }}
         >
           Refresh
@@ -134,10 +180,7 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
         style={{ borderColor: "var(--border)" }}
       >
         {filters.map((f) => {
-          const count =
-            f === "all"
-              ? jobs.length
-              : jobs.filter((j) => j.status === f).length;
+          const count = f === "all" ? jobs.length : jobs.filter((j) => j.status === f).length;
           const isActive = filter === f;
           return (
             <button
@@ -146,7 +189,7 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
               className="text-xs px-3 py-1.5 rounded-lg font-medium capitalize transition-colors whitespace-nowrap"
               style={
                 isActive
-                  ? { background: "rgba(34,197,94,0.15)", color: "var(--accent)" }
+                  ? { background: "var(--accent-glow)", color: "var(--accent-light)" }
                   : { color: "var(--text-secondary)", background: "transparent" }
               }
             >
@@ -173,16 +216,16 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
 
         {!loading && !error && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-            <p className="text-2xl mb-3">
-              {filter === "applied" ? "📋" : filter === "skipped" ? "⏭" : "🔍"}
-            </p>
+            <span style={{ color: "var(--text-muted)" }} className="mb-3">
+              {filterEmptyIcon()}
+            </span>
             <p className="font-medium" style={{ color: "var(--text-primary)" }}>
               {jobs.length === 0 ? "No jobs yet" : `No ${filter} jobs`}
             </p>
             <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
               {jobs.length === 0
                 ? "Start the agent to begin finding and applying to jobs"
-                : `Switch to a different filter to see results`}
+                : "Switch to a different filter to see results"}
             </p>
           </div>
         )}
@@ -192,33 +235,22 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
             {filtered.map((job) => (
               <li
                 key={job.id}
-                className="px-4 py-3 hover:bg-white/[0.02] transition-colors cursor-pointer"
-                onClick={() =>
-                  setSelectedJob(selectedJob?.id === job.id ? null : job)
-                }
+                className="px-4 py-3 hover:bg-(--hover-bg) transition-colors cursor-pointer"
+                onClick={() => setSelectedJob(selectedJob?.id === job.id ? null : job)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p
-                        className="text-sm font-medium truncate"
-                        style={{ color: "var(--text-primary)" }}
-                      >
+                      <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
                         {job.title}
                       </p>
                       <ScoreBadge score={job.score} />
                     </div>
-                    <p
-                      className="text-xs mt-0.5 truncate"
-                      style={{ color: "var(--text-secondary)" }}
-                    >
+                    <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
                       {job.company}
                     </p>
                     {job.reason && (
-                      <p
-                        className="text-xs mt-1 line-clamp-2"
-                        style={{ color: "var(--text-muted)" }}
-                      >
+                      <p className="text-xs mt-1 line-clamp-2" style={{ color: "var(--text-muted)" }}>
                         {job.reason}
                       </p>
                     )}
@@ -226,27 +258,16 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <StatusBadge status={job.status} />
                     {job.applied_at && (
-                      <span
-                        className="text-xs"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {new Date(job.applied_at).toLocaleDateString([], {
-                          month: "short",
-                          day: "numeric",
-                        })}
+                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {new Date(job.applied_at).toLocaleDateString([], { month: "short", day: "numeric" })}
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Expanded company card */}
                 {selectedJob?.id === job.id && (
                   <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-                    <CompanyCard
-                      company={job.company}
-                      jobUrl={job.url}
-                      jobTitle={job.title}
-                    />
+                    <CompanyCard company={job.company} jobUrl={job.url} jobTitle={job.title} />
                   </div>
                 )}
               </li>

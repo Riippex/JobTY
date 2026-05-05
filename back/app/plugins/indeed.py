@@ -16,34 +16,18 @@ the apply flow will be skipped gracefully.
 
 import asyncio
 import logging
-import os
 import random
 from pathlib import Path
 
 from playwright.async_api import Browser, Page, async_playwright
 
 from app.plugins.base_board import BaseJobBoard, CaptchaDetectedError, JobListing
+from app.services import config_store
 
 logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 3
 _INDEED_BASE = "https://www.indeed.com"
-
-
-def _env_headless() -> bool:
-    return os.getenv("PLAYWRIGHT_HEADLESS", "true").lower() != "false"
-
-
-def _env_slow_mo() -> float:
-    return float(os.getenv("PLAYWRIGHT_SLOW_MO", "0"))
-
-
-def _env_timeout() -> float:
-    return float(os.getenv("PLAYWRIGHT_TIMEOUT", "30000"))
-
-
-def _env_max_apps() -> int:
-    return int(os.getenv("MAX_APPLICATIONS_PER_RUN", "5"))
 
 
 async def _human_delay() -> None:
@@ -55,18 +39,13 @@ class IndeedBoard(BaseJobBoard):
     """Playwright-based Indeed automation plugin."""
 
     def __init__(self) -> None:
-        self._email = os.getenv("INDEED_EMAIL", "")
-        self._password = os.getenv("INDEED_PASSWORD", "")
-
-        if not self._email or not self._password:
-            logger.info(
-                "INDEED_EMAIL / INDEED_PASSWORD not set — Indeed Apply will be skipped"
-            )
-
-        self._headless = _env_headless()
-        self._slow_mo = _env_slow_mo()
-        self._timeout = _env_timeout()
-        self._max_apps = _env_max_apps()
+        self._headless: bool = bool(
+            config_store.get("playwright_headless")
+            if config_store.get("playwright_headless") is not None else True
+        )
+        self._slow_mo: float = float(config_store.get("playwright_slow_mo") or 0)
+        self._timeout: float = float(config_store.get("playwright_timeout") or 30_000)
+        self._max_apps: int = int(config_store.get("max_applications_per_run") or 5)
 
     # ------------------------------------------------------------------
     # Public API
@@ -138,10 +117,8 @@ class IndeedBoard(BaseJobBoard):
 
     async def apply(self, job: JobListing, cv_path: str, profile_data: dict) -> bool:
         """Attempt an Indeed Apply application to *job*."""
-        if not self._email or not self._password:
-            logger.info(
-                "Indeed credentials missing — skipping apply for %s", job.url
-            )
+        if not job.easy_apply:
+            logger.info("Indeed: skipping %s — no Indeed Apply button", job.url)
             return False
 
         async with async_playwright() as pw:
@@ -151,12 +128,6 @@ class IndeedBoard(BaseJobBoard):
             page.set_default_timeout(self._timeout)
 
             try:
-                if not await self._login(page):
-                    logger.error(
-                        "Indeed login failed — cannot apply to %s", job.url
-                    )
-                    return False
-
                 await page.goto(job.url, wait_until="domcontentloaded")
                 await _human_delay()
                 await self._check_captcha(page)
@@ -182,52 +153,6 @@ class IndeedBoard(BaseJobBoard):
             headless=self._headless,
             slow_mo=self._slow_mo,
         )
-
-    async def _login(self, page: Page) -> bool:
-        """Sign in to Indeed. Returns True on success."""
-        for attempt in range(MAX_RETRIES):
-            try:
-                await page.goto(
-                    f"{_INDEED_BASE}/account/login",
-                    wait_until="domcontentloaded",
-                )
-                await _human_delay()
-                await self._check_captcha(page)
-
-                await page.get_by_label("Email address").fill(self._email)
-                await _human_delay()
-
-                continue_btn = page.get_by_role("button", name="Continue")
-                await continue_btn.click()
-                await _human_delay()
-
-                await page.get_by_label("Password").fill(self._password)
-                await _human_delay()
-
-                await page.get_by_role("button", name="Sign in").click()
-
-                await page.wait_for_url(
-                    lambda url: "/account/login" not in url,
-                    timeout=self._timeout,
-                )
-                logger.debug("Indeed login successful")
-                return True
-
-            except CaptchaDetectedError:
-                raise
-            except Exception as exc:
-                backoff = 2**attempt
-                logger.warning(
-                    "Indeed login attempt %d/%d failed: %s — retrying in %ds",
-                    attempt + 1,
-                    MAX_RETRIES,
-                    exc,
-                    backoff,
-                )
-                await asyncio.sleep(backoff)
-
-        logger.error("Indeed login failed after %d attempts", MAX_RETRIES)
-        return False
 
     async def _scrape_listings(self, page: Page) -> list[JobListing]:
         """Extract job cards from the current Indeed search results page."""

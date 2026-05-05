@@ -2,11 +2,14 @@
 
 POST /cv/{profile_name}/parse   — trigger LLM parsing and return CVParsed
 GET  /cv/{profile_name}/parsed  — return cached CVParsed (404 if not yet parsed)
+PUT  /cv/{profile_name}/parsed  — manually override cached CVParsed
 """
 
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +21,14 @@ from app.services.llm_provider import LLMParseError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["cv"])
+
+
+class CVParsedUpdate(BaseModel):
+    skills: list[str]
+    languages: list[str]
+    experience_years: int
+    education: list[str]
+    summary: str
 
 
 @router.post("/{profile_name}/parse", response_model=CVParsed)
@@ -42,6 +53,12 @@ async def trigger_parse(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"LLM returned unparseable response: {exc}",
+        )
+    except Exception as exc:
+        logger.error("Unexpected error parsing CV for '%s': %s", profile_name, exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"CV parse failed: {exc}",
         )
 
 
@@ -76,3 +93,43 @@ async def get_parsed(
         )
 
     return CVParsed.model_validate(cache_row.parsed_json)
+
+
+@router.put("/{profile_name}/parsed", response_model=CVParsed)
+async def update_parsed(
+    profile_name: str,
+    payload: CVParsedUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> CVParsed:
+    """Manually override the parsed CV data for a profile."""
+    profile_result = await db.execute(
+        select(Profile).where(Profile.name == profile_name)
+    )
+    profile = profile_result.scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Profile '{profile_name}' not found",
+        )
+
+    cache_result = await db.execute(
+        select(CVCache).where(CVCache.profile_id == profile.id)
+    )
+    cache_row = cache_result.scalar_one_or_none()
+
+    new_data = payload.model_dump()
+    new_data["parsed"] = True
+
+    if cache_row is None:
+        cache_row = CVCache(
+            profile_id=profile.id,
+            pdf_hash="manual",
+            parsed_json=new_data,
+            parsed_at=datetime.now(UTC),
+        )
+        db.add(cache_row)
+    else:
+        cache_row.parsed_json = new_data
+
+    await db.commit()
+    return CVParsed.model_validate(payload.model_dump())

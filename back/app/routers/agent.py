@@ -101,3 +101,48 @@ async def stop() -> dict[str, str]:
 async def agent_status() -> AgentStatusResponse:
     """Return the current agent state."""
     return AgentStatusResponse(**get_status())
+
+
+@router.get("/session-status")
+async def session_status() -> dict[str, bool]:
+    """Return whether a fresh saved session exists for each job board."""
+    from app.services.session_manager import SessionManager
+    return {
+        "linkedin": SessionManager("linkedin").exists_and_fresh(),
+    }
+
+
+@router.post("/login-linkedin")
+async def login_linkedin() -> dict[str, bool | str]:
+    """Open a headed browser so the user can log in to LinkedIn manually.
+
+    Blocks until the user completes the login or the 3-minute timeout
+    expires. Saves the session to disk on success so future bot runs
+    skip the login page entirely.
+    """
+    from app.services.session_manager import SessionManager
+    from app.plugins.linkedin import LinkedInBoard
+
+    if SessionManager("linkedin").exists_and_fresh():
+        return {"ok": True, "detail": "Valid session already exists — no login needed"}
+
+    try:
+        success = await LinkedInBoard.manual_login()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.error("login-linkedin raised: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login failed: {exc}",
+        ) from exc
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Manual login timed out or failed. Try again and complete login within 3 minutes.",
+        )
+    return {"ok": True, "detail": "Session saved — the bot will reuse it automatically"}

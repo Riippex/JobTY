@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+      - "6080:6080"
     volumes:
       - ./back:/app
       - jobty_data:/app/data
@@ -29,6 +30,7 @@ services:
       - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DISPLAY=:99
     depends_on: []
     restart: unless-stopped
 

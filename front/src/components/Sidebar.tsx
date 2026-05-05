@@ -11,6 +11,7 @@ interface SidebarProps {
   loading: boolean;
   onActivate: (name: string) => Promise<void>;
   onDelete: (name: string) => Promise<void>;
+  onEdit: (profile: Profile) => void;
 }
 
 export default function Sidebar({
@@ -20,6 +21,7 @@ export default function Sidebar({
   loading,
   onActivate,
   onDelete,
+  onEdit,
 }: SidebarProps) {
   const router = useRouter();
 
@@ -48,18 +50,15 @@ export default function Sidebar({
     >
       {/* Logo */}
       <div
-        className="flex items-center gap-2 px-5 py-4 border-b"
+        className="flex items-center gap-2.5 px-5 py-4 border-b"
         style={{ borderColor: "var(--border)" }}
       >
-        <span
-          className="text-xl font-bold tracking-tight"
-          style={{ color: "var(--accent)" }}
-        >
+        <span className="text-xl font-bold tracking-tight gradient-text">
           JobTY
         </span>
         <span
-          className="text-xs px-1.5 py-0.5 rounded text-black font-semibold"
-          style={{ background: "var(--accent)" }}
+          className="text-xs px-1.5 py-0.5 rounded font-semibold text-white"
+          style={{ background: "var(--gradient-brand)" }}
         >
           AI
         </span>
@@ -96,9 +95,9 @@ export default function Sidebar({
                   onClick={() => !isActive && onActivate(profile.name)}
                   className="flex-1 min-w-0 text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors"
                   style={{
-                    background: isActive ? "rgba(34,197,94,0.1)" : "transparent",
-                    border: isActive ? "1px solid rgba(34,197,94,0.4)" : "1px solid transparent",
-                    color: isActive ? "var(--accent)" : "var(--text-primary)",
+                    background: isActive ? "rgba(59,130,246,0.1)" : "transparent",
+                    border: isActive ? "1px solid rgba(59,130,246,0.35)" : "1px solid transparent",
+                    color: isActive ? "var(--accent-light)" : "var(--text-primary)",
                   }}
                 >
                   <span className="truncate font-medium">{profile.name}</span>
@@ -108,6 +107,18 @@ export default function Sidebar({
                       style={{ background: "var(--accent)" }}
                     />
                   )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onEdit(profile)}
+                  className="opacity-0 group-hover:opacity-100 shrink-0 leading-none px-1.5 py-1 rounded transition-all hover:bg-blue-500/15 hover:text-blue-400"
+                  style={{ color: "var(--text-muted)" }}
+                  title="Edit profile"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
                 </button>
                 <button
                   type="button"
@@ -135,7 +146,7 @@ export default function Sidebar({
       >
         <Link
           href="/settings"
-          className="w-full text-sm font-medium py-2 px-3 rounded-lg flex items-center gap-2 transition-colors hover:bg-white/5"
+          className="w-full text-sm font-medium py-2 px-3 rounded-lg flex items-center gap-2 transition-colors hover:bg-(--hover-bg)"
           style={{ color: "var(--text-secondary)" }}
         >
           <span>⚙</span>
@@ -144,7 +155,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={() => router.push("/setup")}
-          className="w-full text-sm font-medium py-2 px-3 rounded-lg border border-dashed transition-colors hover:border-green-500/60 hover:text-green-400"
+          className="w-full text-sm font-medium py-2 px-3 rounded-lg border border-dashed transition-colors hover:border-blue-500/50 hover:text-blue-400"
           style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
         >
           + New Profile

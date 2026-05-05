@@ -3,6 +3,23 @@ export const API_URL =
 export const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
 
+export class ApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+function parseErrorBody(status: number, statusText: string, body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { detail?: string };
+    if (parsed.detail) return parsed.detail;
+  } catch {
+    // not JSON — fall through
+  }
+  return body ? `${status} ${statusText}: ${body}` : `${status} ${statusText}`;
+}
+
 async function apiFetch<T>(
   path: string,
   options?: RequestInit
@@ -14,7 +31,7 @@ async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    throw new ApiError(res.status, parseErrorBody(res.status, res.statusText, body));
   }
 
   return res.json() as Promise<T>;
@@ -44,6 +61,14 @@ export interface CVInfo {
   parsed: boolean;
   skills: string[];
   uploaded_at?: string;
+}
+
+export interface CVParsed {
+  skills: string[];
+  languages: string[];
+  experience_years: number;
+  education: string[];
+  summary: string;
 }
 
 export function fetchProfiles(): Promise<Profile[]> {
@@ -98,7 +123,7 @@ export async function uploadCV(name: string, file: File): Promise<CVInfo> {
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    throw new Error(parseErrorBody(res.status, res.statusText, body));
   }
 
   return res.json() as Promise<CVInfo>;
@@ -106,6 +131,23 @@ export async function uploadCV(name: string, file: File): Promise<CVInfo> {
 
 export function fetchCV(name: string): Promise<CVInfo> {
   return apiFetch<CVInfo>(`/profiles/${encodeURIComponent(name)}/cv`);
+}
+
+export function fetchCVParsed(name: string): Promise<CVParsed> {
+  return apiFetch<CVParsed>(`/cv/${encodeURIComponent(name)}/parsed`);
+}
+
+export function updateCVParsed(name: string, data: CVParsed): Promise<CVParsed> {
+  return apiFetch<CVParsed>(`/cv/${encodeURIComponent(name)}/parsed`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function parseCVFromPDF(name: string): Promise<CVParsed> {
+  return apiFetch<CVParsed>(`/cv/${encodeURIComponent(name)}/parse`, {
+    method: "POST",
+  });
 }
 
 // ---- Agent ----
@@ -134,6 +176,20 @@ export function stopAgent(): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>("/agent/stop", { method: "POST" });
 }
 
+export interface SessionStatus {
+  linkedin: boolean;
+}
+
+export function fetchSessionStatus(): Promise<SessionStatus> {
+  return apiFetch<SessionStatus>("/agent/session-status");
+}
+
+export function loginLinkedIn(): Promise<{ ok: boolean; detail: string }> {
+  return apiFetch<{ ok: boolean; detail: string }>("/agent/login-linkedin", {
+    method: "POST",
+  });
+}
+
 // ---- Settings ----
 
 export interface Settings {
@@ -155,6 +211,9 @@ export interface Settings {
   enabled_boards: string[];
   linkedin_email: string;
   linkedin_password: string;
+  indeed_email: string;
+  indeed_password: string;
+  computrabajo_country: string;
 }
 
 export function fetchSettings(): Promise<Settings> {

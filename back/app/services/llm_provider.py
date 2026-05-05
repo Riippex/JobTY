@@ -38,11 +38,27 @@ class LLMParseError(Exception):
         self.raw_response = raw_response
 
 
+_KEY_MAP: dict[str, str | None] = {
+    "openai": "openai_api_key",
+    "groq": "groq_api_key",
+    "anthropic": "anthropic_api_key",
+    "gemini": "gemini_api_key",
+    "ollama": None,  # no key required
+}
+
+
+def _provider_has_key(provider_name: str) -> bool:
+    key = _KEY_MAP.get(provider_name)
+    if key is None:
+        return True
+    return bool(str(config_store.get(key) or "").strip())
+
+
 class LLMProvider:
     """Unified async interface for OpenAI, Groq, Ollama, Anthropic, and Gemini."""
 
-    def __init__(self) -> None:
-        raw = str(config_store.get("llm_provider") or "openai").lower()
+    def __init__(self, provider_name: str | None = None) -> None:
+        raw = (provider_name or str(config_store.get("llm_provider") or "openai")).lower()
         try:
             self._provider = LLMProviderName(raw)
         except ValueError:
@@ -225,6 +241,46 @@ def get_llm_provider() -> LLMProvider:
     if _instance is None:
         _instance = LLMProvider()
     return _instance
+
+
+# Priority order for fallback: fastest/cheapest free tiers first.
+_FALLBACK_ORDER = ["groq", "gemini", "openai", "anthropic", "ollama"]
+
+
+def get_all_available_providers() -> list[LLMProvider]:
+    """Return LLMProvider instances for every provider that has a key configured.
+
+    The configured provider is always first; the rest follow _FALLBACK_ORDER.
+    """
+    configured = str(config_store.get("llm_provider") or "openai").lower()
+    seen: set[str] = set()
+    result: list[LLMProvider] = []
+
+    order = [configured] + [p for p in _FALLBACK_ORDER if p != configured]
+    for name in order:
+        if name in seen:
+            continue
+        seen.add(name)
+        if _provider_has_key(name):
+            provider = get_llm_provider() if name == configured else LLMProvider(provider_name=name)
+            result.append(provider)
+
+    return result
+
+
+def get_provider_with_fallback() -> LLMProvider:
+    """Return the first provider that has an API key configured.
+
+    Used by background tasks (CV parsing, job scoring) so they don't silently fail
+    just because the primary provider's key is missing or invalid.
+    """
+    providers = get_all_available_providers()
+    if not providers:
+        raise RuntimeError(
+            "No LLM provider has an API key configured. "
+            "Please add at least one API key in Settings."
+        )
+    return providers[0]
 
 
 def reset_provider() -> None:

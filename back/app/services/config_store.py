@@ -23,9 +23,12 @@ DEFAULT_CONFIG: dict = {
     "playwright_timeout": int(os.getenv("PLAYWRIGHT_TIMEOUT", "30000")),
     "max_applications_per_run": int(os.getenv("MAX_APPLICATIONS_PER_RUN", "10")),
     "enabled_boards": [b.strip() for b in os.getenv("ENABLED_BOARDS", "linkedin,indeed").split(",")],
-    # Job boards
+    # Job board credentials
     "linkedin_email": os.getenv("LINKEDIN_EMAIL", ""),
     "linkedin_password": os.getenv("LINKEDIN_PASSWORD", ""),
+    "indeed_email": os.getenv("INDEED_EMAIL", ""),
+    "indeed_password": os.getenv("INDEED_PASSWORD", ""),
+    "computrabajo_country": os.getenv("COMPUTRABAJO_COUNTRY", "com.co"),
 }
 
 

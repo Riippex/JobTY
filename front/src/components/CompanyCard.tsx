@@ -127,7 +127,7 @@ export default function CompanyCard({
               href={jobUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs px-2 py-0.5 rounded-full transition-colors hover:text-green-400"
+              className="text-xs px-2 py-0.5 rounded-full transition-colors hover:text-blue-400"
               style={{ color: "var(--text-muted)", background: "var(--bg-card)" }}
             >
               View job →
@@ -158,9 +158,9 @@ export default function CompanyCard({
                 key={tech}
                 className="text-xs px-2 py-0.5 rounded-md"
                 style={{
-                  background: "rgba(34,197,94,0.08)",
-                  color: "var(--accent)",
-                  border: "1px solid rgba(34,197,94,0.2)",
+                  background: "rgba(59,130,246,0.08)",
+                  color: "var(--accent-light)",
+                  border: "1px solid rgba(59,130,246,0.2)",
                 }}
               >
                 {tech}

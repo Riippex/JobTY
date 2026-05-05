@@ -1,7 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { type Settings, fetchSettings, updateSettings } from "@/lib/api";
+import {
+  type Settings,
+  fetchSettings,
+  updateSettings,
+} from "@/lib/api";
 
 const PROVIDERS = ["openai", "groq", "anthropic", "gemini", "ollama"] as const;
 const PROVIDER_LABELS: Record<string, string> = {
@@ -18,6 +23,8 @@ const DEFAULT_MODELS: Record<string, string> = {
   gemini: "gemini-2.5-flash",
   ollama: "llama3",
 };
+
+// ── Shared UI primitives ──────────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -72,7 +79,7 @@ function SaveButton({ onSave, saved }: { onSave: () => Promise<void>; saved: boo
         onClick={() => void handle()}
         disabled={loading}
         className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-40"
-        style={{ background: "var(--accent)", color: "black" }}
+        style={{ background: "var(--accent)", color: "white" }}
       >
         {loading ? "Saving…" : "Save"}
       </button>
@@ -81,26 +88,33 @@ function SaveButton({ onSave, saved }: { onSave: () => Promise<void>; saved: boo
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [llmSaved, setLlmSaved] = useState(false);
   const [botSaved, setBotSaved] = useState(false);
   const [credsSaved, setCredsSaved] = useState(false);
 
-  // Local editable state
+  // Credentials state
+  const [linkedinEmail, setLinkedinEmail] = useState("");
+  const [linkedinPassword, setLinkedinPassword] = useState("");
+  const [indeedEmail, setIndeedEmail] = useState("");
+  const [indeedPassword, setIndeedPassword] = useState("");
+  const [computrabajoCountry, setComputrabajoCountry] = useState("com.co");
+
+  // LLM state
   const [provider, setProvider] = useState<Settings["llm_provider"]>("openai");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
   const [ollamaUrl, setOllamaUrl] = useState("");
 
+  // Bot state
   const [headless, setHeadless] = useState(true);
   const [slowMo, setSlowMo] = useState(0);
   const [timeout, setTimeout_] = useState(30);
   const [maxApps, setMaxApps] = useState(10);
   const [boards, setBoards] = useState<string[]>(["linkedin", "indeed"]);
-
-  const [linkedinEmail, setLinkedinEmail] = useState("");
-  const [linkedinPassword, setLinkedinPassword] = useState("");
 
   useEffect(() => {
     fetchSettings().then((s) => {
@@ -117,6 +131,8 @@ export default function SettingsPage() {
       setMaxApps(s.max_applications_per_run);
       setBoards(s.enabled_boards);
       setLinkedinEmail(s.linkedin_email);
+      setIndeedEmail(s.indeed_email);
+      setComputrabajoCountry(s.computrabajo_country);
     }).catch(console.error);
   }, []);
 
@@ -141,6 +157,21 @@ export default function SettingsPage() {
     setTimeout(() => setLlmSaved(false), 2000);
   }
 
+  async function saveCreds() {
+    const updates: Partial<Settings> = {
+      linkedin_email: linkedinEmail,
+      indeed_email: indeedEmail,
+      computrabajo_country: computrabajoCountry,
+    };
+    if (linkedinPassword) updates.linkedin_password = linkedinPassword;
+    if (indeedPassword) updates.indeed_password = indeedPassword;
+    await updateSettings(updates);
+    setLinkedinPassword("");
+    setIndeedPassword("");
+    setCredsSaved(true);
+    setTimeout(() => setCredsSaved(false), 2000);
+  }
+
   async function saveBot() {
     await updateSettings({
       playwright_headless: headless,
@@ -151,15 +182,6 @@ export default function SettingsPage() {
     });
     setBotSaved(true);
     setTimeout(() => setBotSaved(false), 2000);
-  }
-
-  async function saveCreds() {
-    const updates: Partial<Settings> = { linkedin_email: linkedinEmail };
-    if (linkedinPassword) updates.linkedin_password = linkedinPassword;
-    await updateSettings(updates);
-    setLinkedinPassword("");
-    setCredsSaved(true);
-    setTimeout(() => setCredsSaved(false), 2000);
   }
 
   if (!settings) {
@@ -174,7 +196,19 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-6 space-y-6">
-      <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Settings</h1>
+      <div className="flex items-center gap-3">
+        <Link
+          href="/"
+          className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
+          style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+          aria-label="Back to dashboard"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+        </Link>
+        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Settings</h1>
+      </div>
 
       {/* LLM Provider */}
       <Section title="LLM Provider">
@@ -192,7 +226,7 @@ export default function SettingsPage() {
                 className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
                 style={{
                   background: provider === p ? "var(--accent)" : "var(--bg-elevated)",
-                  color: provider === p ? "black" : "var(--text-secondary)",
+                  color: provider === p ? "white" : "var(--text-secondary)",
                   border: `1px solid ${provider === p ? "var(--accent)" : "var(--border)"}`,
                 }}
               >
@@ -216,11 +250,11 @@ export default function SettingsPage() {
           </Field>
         )}
 
-        {provider === "ollama" ? (
+        {provider === "ollama" && (
           <Field label="Ollama Base URL" hint="Use host.docker.internal instead of localhost inside Docker">
             <Input value={ollamaUrl} onChange={setOllamaUrl} />
           </Field>
-        ) : null}
+        )}
 
         <Field label="Model" hint={`Default: ${DEFAULT_MODELS[provider]}`}>
           <Input value={model} onChange={setModel} placeholder={DEFAULT_MODELS[provider]} />
@@ -233,13 +267,13 @@ export default function SettingsPage() {
       <Section title="Bot Settings">
         <Field label="Job boards">
           <div className="flex gap-4">
-            {["linkedin", "indeed"].map((board) => (
+            {["linkedin", "indeed", "computrabajo"].map((board) => (
               <label key={board} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={boards.includes(board)}
                   onChange={() => toggleBoard(board)}
-                  className="accent-green-500 w-4 h-4"
+                  className="accent-blue-500 w-4 h-4"
                 />
                 <span className="text-sm capitalize" style={{ color: "var(--text-primary)" }}>{board}</span>
               </label>
@@ -254,7 +288,8 @@ export default function SettingsPage() {
             max={50}
             value={maxApps}
             onChange={(e) => setMaxApps(Number(e.target.value))}
-            className="w-full accent-green-500 h-1.5 rounded-full appearance-none cursor-pointer"
+            aria-label="Max applications per run"
+            className="w-full accent-blue-500 h-1.5 rounded-full appearance-none cursor-pointer"
             style={{ background: "var(--border)" }}
           />
           <div className="flex justify-between text-xs mt-1" style={{ color: "var(--text-muted)" }}>
@@ -269,12 +304,14 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={() => setHeadless((h) => !h)}
+            aria-label={headless ? "Disable headless mode" : "Enable headless mode"}
+            aria-pressed={headless}
             className="relative w-11 h-6 rounded-full transition-colors shrink-0"
             style={{ background: headless ? "var(--accent)" : "var(--bg-elevated)", border: "1px solid var(--border)" }}
           >
             <span
               className="absolute top-0.5 w-5 h-5 rounded-full transition-all"
-              style={{ background: headless ? "black" : "var(--text-muted)", left: headless ? "calc(100% - 22px)" : "2px" }}
+              style={{ background: headless ? "white" : "var(--text-muted)", left: headless ? "calc(100% - 22px)" : "2px" }}
             />
           </button>
         </div>
@@ -287,7 +324,8 @@ export default function SettingsPage() {
             step={50}
             value={slowMo}
             onChange={(e) => setSlowMo(Number(e.target.value))}
-            className="w-full accent-green-500 h-1.5 rounded-full appearance-none cursor-pointer"
+            aria-label="Slow Mo delay in milliseconds"
+            className="w-full accent-blue-500 h-1.5 rounded-full appearance-none cursor-pointer"
             style={{ background: "var(--border)" }}
           />
         </Field>
@@ -300,7 +338,8 @@ export default function SettingsPage() {
             step={5}
             value={timeout}
             onChange={(e) => setTimeout_(Number(e.target.value))}
-            className="w-full accent-green-500 h-1.5 rounded-full appearance-none cursor-pointer"
+            aria-label="Action timeout in seconds"
+            className="w-full accent-blue-500 h-1.5 rounded-full appearance-none cursor-pointer"
             style={{ background: "var(--border)" }}
           />
         </Field>
@@ -308,22 +347,60 @@ export default function SettingsPage() {
         <SaveButton onSave={saveBot} saved={botSaved} />
       </Section>
 
-      {/* Job Board Credentials */}
+      {/* Credentials */}
       <Section title="Job Board Credentials">
-        <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "rgba(34,197,94,0.08)", color: "var(--text-secondary)", border: "1px solid rgba(34,197,94,0.15)" }}>
-          Credentials are stored locally on your machine only and never sent anywhere else.
+        <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "var(--hover-bg-strong)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+          Stored locally. Passwords are masked in the API. Leave password blank to keep the current one.
         </p>
 
-        <Field label="LinkedIn Email">
-          <Input value={linkedinEmail} onChange={setLinkedinEmail} placeholder="your@email.com" />
-        </Field>
+        <div className="space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>LinkedIn</p>
+          <Field label="Email">
+            <Input value={linkedinEmail} onChange={setLinkedinEmail} placeholder="you@email.com" />
+          </Field>
+          <Field label="Password" hint={settings.linkedin_password ? "Saved — leave blank to keep" : "Not saved"}>
+            <Input type="password" value={linkedinPassword} onChange={setLinkedinPassword} placeholder="Paste to update…" />
+          </Field>
+        </div>
 
-        <Field
-          label="LinkedIn Password"
-          hint={settings.linkedin_password ? "Password saved — leave blank to keep unchanged" : "No password saved"}
-        >
-          <Input type="password" value={linkedinPassword} onChange={setLinkedinPassword} placeholder="Paste new password to update…" />
-        </Field>
+        <div className="space-y-4 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+          <p className="text-xs font-semibold uppercase tracking-wide pt-2" style={{ color: "var(--text-muted)" }}>Indeed</p>
+          <Field label="Email">
+            <Input value={indeedEmail} onChange={setIndeedEmail} placeholder="you@email.com" />
+          </Field>
+          <Field label="Password" hint={settings.indeed_password ? "Saved — leave blank to keep" : "Not saved"}>
+            <Input type="password" value={indeedPassword} onChange={setIndeedPassword} placeholder="Paste to update…" />
+          </Field>
+        </div>
+
+        <div className="space-y-4 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+          <p className="text-xs font-semibold uppercase tracking-wide pt-2" style={{ color: "var(--text-muted)" }}>Computrabajo</p>
+          <Field label="Country" hint="Domain suffix — e.g. com.co (Colombia), com.mx (México), com.ar (Argentina)">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { code: "com.co", label: "🇨🇴 Colombia" },
+                { code: "com.mx", label: "🇲🇽 México" },
+                { code: "com.ar", label: "🇦🇷 Argentina" },
+                { code: "com.pe", label: "🇵🇪 Perú" },
+                { code: "cl",     label: "🇨🇱 Chile" },
+              ].map(({ code, label }) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setComputrabajoCountry(code)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                  style={{
+                    background: computrabajoCountry === code ? "var(--accent)" : "var(--bg-elevated)",
+                    color: computrabajoCountry === code ? "white" : "var(--text-secondary)",
+                    border: `1px solid ${computrabajoCountry === code ? "var(--accent)" : "var(--border)"}`,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </Field>
+        </div>
 
         <SaveButton onSave={saveCreds} saved={credsSaved} />
       </Section>

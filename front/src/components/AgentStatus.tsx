@@ -14,27 +14,6 @@ interface AgentStatusProps {
   onClearEvents: () => void;
 }
 
-function eventIcon(event: AgentEvent["event"]): string {
-  switch (event) {
-    case "job_found":
-      return "search";
-    case "applying":
-      return "send";
-    case "scored":
-      return "star";
-    case "applied":
-      return "check_circle";
-    case "skipped":
-      return "skip_next";
-    case "error":
-      return "error";
-    case "done":
-      return "flag";
-    default:
-      return "info";
-  }
-}
-
 function eventColor(event: AgentEvent["event"]): string {
   switch (event) {
     case "job_found":
@@ -181,7 +160,7 @@ export default function AgentStatus({
           {events.length > 0 && (
             <button
               onClick={onClearEvents}
-              className="text-xs px-2 py-1 rounded transition-colors hover:bg-neutral-700"
+              className="text-xs px-2 py-1 rounded transition-colors hover:bg-(--hover-bg-strong)"
               style={{ color: "var(--text-muted)" }}
             >
               Clear
@@ -195,8 +174,8 @@ export default function AgentStatus({
               isRunning || isStopping
                 ? { background: "rgba(239,68,68,0.15)", color: "#f87171" }
                 : {
-                    background: "rgba(34,197,94,0.15)",
-                    color: "var(--accent)",
+                    background: "var(--accent-glow)",
+                    color: "var(--accent-light)",
                   }
             }
           >

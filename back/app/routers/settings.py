@@ -40,6 +40,9 @@ class SettingsResponse(BaseModel):
     enabled_boards: list[str]
     linkedin_email: str
     linkedin_password: str
+    indeed_email: str
+    indeed_password: str
+    computrabajo_country: str
 
 
 class SettingsUpdate(BaseModel):
@@ -61,10 +64,13 @@ class SettingsUpdate(BaseModel):
     enabled_boards: list[str] | None = None
     linkedin_email: str | None = None
     linkedin_password: str | None = None
+    indeed_email: str | None = None
+    indeed_password: str | None = None
+    computrabajo_country: str | None = None
 
 
 def _to_response(cfg: dict) -> SettingsResponse:
-    sensitive = {"openai_api_key", "groq_api_key", "anthropic_api_key", "gemini_api_key", "linkedin_password"}
+    sensitive = {"openai_api_key", "groq_api_key", "anthropic_api_key", "gemini_api_key", "linkedin_password", "indeed_password"}
     masked = {k: (_mask(v) if k in sensitive and isinstance(v, str) else v) for k, v in cfg.items()}
     return SettingsResponse(**masked)
 

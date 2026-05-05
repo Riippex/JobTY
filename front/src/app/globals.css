@@ -1,16 +1,87 @@
 @import "tailwindcss";
 
+/* ── Dark theme (default) ─────────────────────────── */
 :root {
-  --bg-base: #0f0f0f;
-  --bg-card: #1a1a1a;
-  --bg-elevated: #212121;
-  --border: #2a2a2a;
-  --accent: #22c55e;
-  --text-primary: #f5f5f5;
-  --text-secondary: #a3a3a3;
-  --text-muted: #525252;
+  /* Backgrounds — deep navy */
+  --bg-base: #06091a;
+  --bg-card: #0c1228;
+  --bg-elevated: #111b35;
+
+  /* Borders */
+  --border: #1a2d50;
+  --border-light: #243d6a;
+
+  /* Hover overlays */
+  --hover-bg: rgba(255, 255, 255, 0.04);
+  --hover-bg-strong: rgba(255, 255, 255, 0.09);
+
+  /* Brand — electric blue */
+  --accent: #3b82f6;
+  --accent-light: #60a5fa;
+  --accent-dim: #1d4ed8;
+  --accent-glow: rgba(59, 130, 246, 0.12);
+  --accent-glow-strong: rgba(59, 130, 246, 0.25);
+
+  /* Gradients */
+  --gradient-brand: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  --gradient-brand-text: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+
+  /* Text */
+  --text-primary: #eef2ff;
+  --text-secondary: #8ba3c7;
+  --text-muted: #374b6b;
+
+  /* Semantic */
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+
+  /* Elevation */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(26, 45, 80, 0.6);
+  --shadow-elevated: 0 4px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(26, 45, 80, 0.5);
+  --shadow-accent: 0 0 24px rgba(59, 130, 246, 0.2);
 }
 
+/* ── Light theme ──────────────────────────────────── */
+@media (prefers-color-scheme: light) {
+  :root {
+    /* Backgrounds — clean white with blue tint */
+    --bg-base: #f5f7ff;
+    --bg-card: #ffffff;
+    --bg-elevated: #eef2ff;
+
+    /* Borders */
+    --border: #dbe4f7;
+    --border-light: #c5d3ef;
+
+    /* Hover overlays */
+    --hover-bg: rgba(0, 0, 0, 0.04);
+    --hover-bg-strong: rgba(0, 0, 0, 0.07);
+
+    /* Brand — deeper blue for light bg contrast */
+    --accent: #2563eb;
+    --accent-light: #3b82f6;
+    --accent-dim: #1d4ed8;
+    --accent-glow: rgba(37, 99, 235, 0.08);
+    --accent-glow-strong: rgba(37, 99, 235, 0.18);
+
+    /* Gradients — richer for light backgrounds */
+    --gradient-brand: linear-gradient(135deg, #2563eb 0%, #6366f1 100%);
+    --gradient-brand-text: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%);
+
+    /* Text */
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+
+    /* Elevation */
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(219, 228, 240, 0.9);
+    --shadow-elevated: 0 4px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(219, 228, 240, 0.8);
+    --shadow-accent: 0 0 24px rgba(37, 99, 235, 0.12);
+  }
+}
+
+/* ── Base ─────────────────────────────────────────── */
 * {
   box-sizing: border-box;
 }
@@ -20,22 +91,43 @@ body {
   height: 100%;
   background-color: var(--bg-base);
   color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar styling */
+/* ── Selection ────────────────────────────────────── */
+::selection {
+  background: var(--accent-glow-strong);
+  color: var(--accent-light);
+}
+
+/* ── Focus ring ───────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Scrollbar ────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 4px;
+  height: 4px;
 }
-
 ::-webkit-scrollbar-track {
-  background: var(--bg-card);
+  background: var(--bg-base);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 2px;
+  background: var(--border-light);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-dim);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #3a3a3a;
+/* ── Brand gradient text ──────────────────────────── */
+.gradient-text {
+  background: var(--gradient-brand-text);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }

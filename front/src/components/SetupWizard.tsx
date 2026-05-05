@@ -534,7 +534,7 @@ export default function SetupWizard() {
                       max_applications_per_run: Number(e.target.value),
                     }))
                   }
-                  className="w-full accent-green-500 h-1.5 rounded-full appearance-none cursor-pointer"
+                  className="w-full accent-blue-500 h-1.5 rounded-full appearance-none cursor-pointer"
                   style={{ background: "var(--border)" }}
                 />
                 <div

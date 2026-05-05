@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.db import CVCache, Profile
-from app.services.llm_provider import get_llm_provider
+from app.services.llm_provider import get_all_available_providers
 
 logger = logging.getLogger(__name__)
 
@@ -136,15 +136,35 @@ async def parse_cv(profile_name: str, db: AsyncSession) -> CVParsed:
         logger.debug("cv_cache hit for profile='%s' hash=%s", profile_name, pdf_hash[:12])
         return CVParsed.model_validate(cache_row.parsed_json)
 
-    # No usable cache — call the LLM
+    # No usable cache — call the LLM, trying providers in order until one works
     logger.debug("cv_cache miss for profile='%s', calling LLM", profile_name)
     cv_text = _read_pdf(cv_path)
     prompt = _build_prompt(cv_text)
 
-    provider = get_llm_provider()
-    parsed: CVParsed = await provider.complete_structured(
-        prompt, CVParsed, system=_SYSTEM_PROMPT
-    )
+    providers = get_all_available_providers()
+    if not providers:
+        raise RuntimeError(
+            "No LLM provider has an API key configured. "
+            "Please add at least one API key in Settings."
+        )
+
+    last_error: Exception = RuntimeError("No providers available")
+    parsed: CVParsed | None = None
+    for provider in providers:
+        try:
+            parsed = await provider.complete_structured(prompt, CVParsed, system=_SYSTEM_PROMPT)
+            logger.info("CV parsed successfully with provider '%s'", provider._provider)
+            break
+        except Exception as exc:
+            logger.warning(
+                "Provider '%s' failed for CV parse: %s — trying next provider",
+                provider._provider,
+                exc,
+            )
+            last_error = exc
+
+    if parsed is None:
+        raise last_error
 
     # Persist to cache
     serialised = parsed.model_dump()
