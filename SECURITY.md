@@ -46,7 +46,7 @@ The following are in scope:
 
 The following are **out of scope**:
 
-- Third-party job board platforms (LinkedIn, Indeed, etc.)
+- Third-party job board platforms (Indeed, Computrabajo, etc.)
 - Issues in upstream dependencies — report those directly to their maintainers
 
 ## Notes on Credentials

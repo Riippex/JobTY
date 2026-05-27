@@ -135,7 +135,7 @@ JobTY uses a plugin system so new boards can be added without touching the core.
 4. Add integration tests using pre-recorded fixtures (no live network calls in CI).
 5. Document anti-bot considerations specific to the board in your PR description.
 
-See `back/app/plugins/linkedin.py` as a reference implementation.
+See `back/app/plugins/indeed.py` as a reference implementation.
 
 ---
 

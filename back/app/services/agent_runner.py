@@ -13,7 +13,7 @@ The agent loop:
      "stopping".
 
 Environment variables:
-    ENABLED_BOARDS            — comma-separated list, e.g. "linkedin,indeed"
+    ENABLED_BOARDS            — comma-separated list, e.g. "indeed,computrabajo"
     MAX_APPLICATIONS_PER_RUN  — hard cap per run (default 5)
     APPLY_SCORE_THRESHOLD     — minimum score to apply (default 70)
 """
@@ -356,6 +356,8 @@ async def _process_job(
                 "company": job.company,
                 "score": job_score.score,
                 "recommendation": job_score.recommendation,
+                "reasons": job_score.reasons,
+                "concerns": job_score.concerns,
             },
             "timestamp": _ts(),
         }
@@ -387,6 +389,16 @@ async def _process_job(
     applied = False
     if board is not None:
         try:
+            await _broadcast(
+                {
+                    "type": "applying",
+                    "data": {
+                        "company": job.company,
+                        "url": job.url,
+                    },
+                    "timestamp": _ts(),
+                }
+            )
             applied = await board.apply(job, cv_path, profile_data)
         except CaptchaDetectedError as exc:
             _state["errors"].append(str(exc))

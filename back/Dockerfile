@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Virtual display stack: Xvfb + x11vnc + noVNC (so the user can see the
-# browser during manual LinkedIn login via http://localhost:6080/vnc.html)
+# browser during manual login via http://localhost:6080/vnc.html)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     x11vnc \

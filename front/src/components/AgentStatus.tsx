@@ -42,7 +42,8 @@ function eventLabel(ev: AgentEvent): string {
     case "applying":
       return `Applying to ${ev.company}`;
     case "scored":
-      return `Score ${ev.score}/100 — ${ev.reason}`;
+      const reasonText = ev.reasons && ev.reasons.length > 0 ? ` — ${ev.reasons[0]}` : "";
+      return `Score ${ev.score}/100 (${ev.recommendation.toUpperCase()}): ${ev.title} at ${ev.company}${reasonText}`;
     case "applied":
       return `Applied: ${ev.title} at ${ev.company}`;
     case "skipped":

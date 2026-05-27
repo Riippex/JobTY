@@ -109,7 +109,7 @@ Key options:
 |----------|---------|-------------|
 | `LLM_PROVIDER` | `openai` | `openai`, `groq`, or `ollama` |
 | `MAX_APPLICATIONS_PER_RUN` | `20` | Max applications per agent run |
-| `ENABLED_BOARDS` | `linkedin,indeed` | Comma-separated list of job boards |
+| `ENABLED_BOARDS` | `indeed,computrabajo` | Comma-separated list of job boards |
 | `PLAYWRIGHT_HEADLESS` | `true` | Set to `false` to watch the bot in action |
 
 ---

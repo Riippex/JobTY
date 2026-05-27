@@ -5,7 +5,16 @@ import { WS_URL } from "@/lib/api";
 
 export type AgentEvent =
   | { event: "applying"; company: string; url: string; ts: number }
-  | { event: "scored"; job_id: string; score: number; reason: string; ts?: number }
+  | {
+      event: "scored";
+      title: string;
+      company: string;
+      score: number;
+      recommendation: string;
+      reasons: string[];
+      concerns: string[];
+      ts: number;
+    }
   | { event: "done"; applied: number; skipped: number; ts?: number }
   | { event: "error"; msg: string; retrying: boolean; ts: number }
   | { event: "job_found"; title: string; company: string; url: string; ts: number }
@@ -35,7 +44,16 @@ function envelopeToEvent(env: WsEnvelope): AgentEvent | null {
       return { event: "applying", company: str(d["company"]), url: str(d["url"]), ts };
     case "scored":
     case "job_scored":
-      return { event: "scored", job_id: str(d["job_id"]), score: num(d["score"]), reason: str(d["reason"]), ts };
+      return {
+        event: "scored",
+        title: str(d["title"]),
+        company: str(d["company"]),
+        score: num(d["score"]),
+        recommendation: str(d["recommendation"]),
+        reasons: Array.isArray(d["reasons"]) ? d["reasons"].map(String) : [],
+        concerns: Array.isArray(d["concerns"]) ? d["concerns"].map(String) : [],
+        ts,
+      };
     case "done":
       return { event: "done", applied: num(d["applied"]), skipped: num(d["skipped"]) };
     case "error":
