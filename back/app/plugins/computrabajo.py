@@ -23,6 +23,7 @@ from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 from app.plugins.base_board import BaseJobBoard, CaptchaDetectedError, JobListing
 from app.services import config_store
+from app.services.session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,37 @@ class ComputrabajoBoard(BaseJobBoard):
     # Public API
     # ------------------------------------------------------------------
 
+    async def manual_login(self) -> None:
+        """Open a non-headless browser so the user can log in manually, then save cookies."""
+        sm = SessionManager("computrabajo")
+        login_url = f"{self._base}/login"
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=False, slow_mo=0, args=_ARGS)
+            context = await browser.new_context(user_agent=_UA, locale="es-CO")
+            page = await context.new_page()
+            page.set_default_timeout(300_000)
+
+            await page.goto(login_url, wait_until="domcontentloaded")
+            logger.info("Computrabajo: browser open — please log in. Waiting up to 5 minutes…")
+
+            try:
+                await page.wait_for_url(
+                    lambda url: "computrabajo" in url and not any(
+                        p in url for p in ("login", "acceso", "signin")
+                    ),
+                    timeout=300_000,
+                )
+            except Exception as exc:
+                await context.close()
+                await browser.close()
+                raise RuntimeError(f"Computrabajo login timed out or cancelled: {exc}") from exc
+
+            await asyncio.sleep(2)
+            await sm.save(context)
+            await context.close()
+            await browser.close()
+            logger.info("Computrabajo session saved")
+
     async def is_available(self) -> bool:
         return True  # No auth needed for search
 
@@ -83,9 +115,14 @@ class ComputrabajoBoard(BaseJobBoard):
     ) -> list[JobListing]:
         listings: list[JobListing] = []
 
+        sm = SessionManager("computrabajo")
         async with async_playwright() as pw:
             browser = await self._launch(pw)
-            context, page = await self._new_page(browser)
+            ctx_kwargs: dict = {}
+            if sm.exists_and_fresh():
+                ctx_kwargs["storage_state"] = sm.storage_state_path()
+                logger.debug("Computrabajo: using saved session for search")
+            context, page = await self._new_page(browser, **ctx_kwargs)
 
             try:
                 url = self._build_search_url(keywords, locations, remote_only)
@@ -108,9 +145,14 @@ class ComputrabajoBoard(BaseJobBoard):
 
     async def apply(self, job: JobListing, cv_path: str, profile_data: dict) -> bool:
         """Click Aplicar and attempt on-site form. Returns False for external redirects."""
+        sm = SessionManager("computrabajo")
         async with async_playwright() as pw:
             browser = await self._launch(pw)
-            context, page = await self._new_page(browser)
+            ctx_kwargs: dict = {}
+            if sm.exists_and_fresh():
+                ctx_kwargs["storage_state"] = sm.storage_state_path()
+                logger.debug("Computrabajo: using saved session for apply")
+            context, page = await self._new_page(browser, **ctx_kwargs)
 
             try:
                 await page.goto(job.url, wait_until="domcontentloaded")
@@ -167,11 +209,12 @@ class ComputrabajoBoard(BaseJobBoard):
             args=_ARGS,
         )
 
-    async def _new_page(self, browser: Browser) -> tuple[BrowserContext, Page]:
+    async def _new_page(self, browser: Browser, **ctx_kwargs) -> tuple[BrowserContext, Page]:
         ctx = await browser.new_context(
             viewport={"width": 1366, "height": 768},
             user_agent=_UA,
             locale="es-CO",
+            **ctx_kwargs,
         )
         page = await ctx.new_page()
         page.set_default_timeout(self._timeout)

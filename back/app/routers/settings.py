@@ -38,10 +38,6 @@ class SettingsResponse(BaseModel):
     playwright_timeout: int
     max_applications_per_run: int
     enabled_boards: list[str]
-    linkedin_email: str
-    linkedin_password: str
-    indeed_email: str
-    indeed_password: str
     computrabajo_country: str
 
 
@@ -62,16 +58,13 @@ class SettingsUpdate(BaseModel):
     playwright_timeout: int | None = None
     max_applications_per_run: int | None = None
     enabled_boards: list[str] | None = None
-    linkedin_email: str | None = None
-    linkedin_password: str | None = None
-    indeed_email: str | None = None
-    indeed_password: str | None = None
     computrabajo_country: str | None = None
 
 
 def _to_response(cfg: dict) -> SettingsResponse:
-    sensitive = {"openai_api_key", "groq_api_key", "anthropic_api_key", "gemini_api_key", "linkedin_password", "indeed_password"}
-    masked = {k: (_mask(v) if k in sensitive and isinstance(v, str) else v) for k, v in cfg.items()}
+    sensitive = {"openai_api_key", "groq_api_key", "anthropic_api_key", "gemini_api_key"}
+    masked = {k: (_mask(v) if k in sensitive and isinstance(v, str) else v) for k, v in cfg.items()
+              if k in SettingsResponse.model_fields}
     return SettingsResponse(**masked)
 
 

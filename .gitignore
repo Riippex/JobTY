@@ -3,11 +3,19 @@
 .env.*
 !.env.example
 
-# Claude Code (dev tooling — not part of the project)
+# AI agent tooling (dev only — not part of the project)
 CLAUDE.md
 **/CLAUDE.md
+AGENTS.md
+**/AGENTS.md
 .claude/*
 !.claude/.gitkeep
+.codex/*
+!.codex/.gitkeep
+.antigravity/*
+!.antigravity/.gitkeep
+.agents/*
+!.agents/.gitkeep
 
 # OS
 .DS_Store
@@ -25,3 +33,5 @@ back/data/
 # Internal docs
 docs/internal/
 
+# Graphify
+graphify-out

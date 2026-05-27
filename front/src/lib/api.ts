@@ -156,7 +156,7 @@ export interface AgentStatusResponse {
   status: "idle" | "running" | "stopping" | "error";
   current_job: string | null;
   jobs_applied: number;
-  errors: number;
+  errors: string[];
   started_at: string | null;
   profile: string | null;
 }
@@ -174,20 +174,6 @@ export function startAgent(profile_name: string): Promise<{ ok: boolean }> {
 
 export function stopAgent(): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>("/agent/stop", { method: "POST" });
-}
-
-export interface SessionStatus {
-  linkedin: boolean;
-}
-
-export function fetchSessionStatus(): Promise<SessionStatus> {
-  return apiFetch<SessionStatus>("/agent/session-status");
-}
-
-export function loginLinkedIn(): Promise<{ ok: boolean; detail: string }> {
-  return apiFetch<{ ok: boolean; detail: string }>("/agent/login-linkedin", {
-    method: "POST",
-  });
 }
 
 // ---- Settings ----
@@ -209,11 +195,25 @@ export interface Settings {
   playwright_timeout: number;
   max_applications_per_run: number;
   enabled_boards: string[];
-  linkedin_email: string;
-  linkedin_password: string;
-  indeed_email: string;
-  indeed_password: string;
   computrabajo_country: string;
+}
+
+export interface BoardLoginStatus {
+  board: string;
+  connected: boolean;
+  expires_at: string | null;
+}
+
+export function fetchBoardLoginStatus(board: string): Promise<BoardLoginStatus> {
+  return apiFetch<BoardLoginStatus>(`/agent/login/${board}`);
+}
+
+export function connectBoard(board: string): Promise<{ ok: boolean; board: string }> {
+  return apiFetch<{ ok: boolean; board: string }>(`/agent/login/${board}`, { method: "POST" });
+}
+
+export function disconnectBoard(board: string): Promise<{ ok: boolean; board: string }> {
+  return apiFetch<{ ok: boolean; board: string }>(`/agent/login/${board}`, { method: "DELETE" });
 }
 
 export function fetchSettings(): Promise<Settings> {

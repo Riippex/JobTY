@@ -7,6 +7,7 @@ GET  /agent/status  — return current agent state
 
 import asyncio
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.db import Profile
 from app.services.agent_runner import get_status, start_agent, stop_agent
+from app.services.session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -103,46 +105,61 @@ async def agent_status() -> AgentStatusResponse:
     return AgentStatusResponse(**get_status())
 
 
-@router.get("/session-status")
-async def session_status() -> dict[str, bool]:
-    """Return whether a fresh saved session exists for each job board."""
-    from app.services.session_manager import SessionManager
+# ---------------------------------------------------------------------------
+# Board login (manual OAuth / session cookie flow)
+# ---------------------------------------------------------------------------
+
+_VALID_BOARDS = {"indeed", "computrabajo"}
+
+
+@router.get("/login/{board}")
+async def board_login_status(board: str) -> dict:
+    """Return connection status for a job board."""
+    if board not in _VALID_BOARDS:
+        raise HTTPException(status_code=404, detail=f"Unknown board: {board}")
+
+    sm = SessionManager(board)
+    connected = sm.exists_and_fresh()
+    exp = sm.expires_at() if connected else None
     return {
-        "linkedin": SessionManager("linkedin").exists_and_fresh(),
+        "board": board,
+        "connected": connected,
+        "expires_at": datetime.fromtimestamp(exp, tz=UTC).isoformat() if exp else None,
     }
 
 
-@router.post("/login-linkedin")
-async def login_linkedin() -> dict[str, bool | str]:
-    """Open a headed browser so the user can log in to LinkedIn manually.
+@router.post("/login/{board}")
+async def login_board(board: str) -> dict:
+    """Open a browser window for the user to log in, then save session cookies.
 
-    Blocks until the user completes the login or the 3-minute timeout
-    expires. Saves the session to disk on success so future bot runs
-    skip the login page entirely.
+    Blocks until login completes (up to 5 minutes).
     """
-    from app.services.session_manager import SessionManager
-    from app.plugins.linkedin import LinkedInBoard
-
-    if SessionManager("linkedin").exists_and_fresh():
-        return {"ok": True, "detail": "Valid session already exists — no login needed"}
+    if board not in _VALID_BOARDS:
+        raise HTTPException(status_code=404, detail=f"Unknown board: {board}")
 
     try:
-        success = await LinkedInBoard.manual_login()
-    except RuntimeError as exc:
+        if board == "indeed":
+            from app.plugins.indeed import IndeedBoard  # noqa: PLC0415
+            await asyncio.wait_for(IndeedBoard().manual_login(), timeout=310)
+        elif board == "computrabajo":
+            from app.plugins.computrabajo import ComputrabajoBoard  # noqa: PLC0415
+            await asyncio.wait_for(ComputrabajoBoard().manual_login(), timeout=310)
+    except asyncio.TimeoutError as exc:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail="Login window timed out — please try again",
         ) from exc
     except Exception as exc:
-        logger.error("login-linkedin raised: %s", exc, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed: {exc}",
-        ) from exc
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Manual login timed out or failed. Try again and complete login within 3 minutes.",
-        )
-    return {"ok": True, "detail": "Session saved — the bot will reuse it automatically"}
+    return {"ok": True, "board": board}
+
+
+@router.delete("/login/{board}")
+async def logout_board(board: str) -> dict:
+    """Invalidate the saved session for a job board."""
+    if board not in _VALID_BOARDS:
+        raise HTTPException(status_code=404, detail=f"Unknown board: {board}")
+
+    SessionManager(board).invalidate()
+    return {"ok": True, "board": board}

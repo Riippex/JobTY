@@ -47,6 +47,12 @@ class SessionManager:
         """Return the path string to pass to browser.new_context(storage_state=...)."""
         return str(self._path)
 
+    def expires_at(self) -> float | None:
+        """Return the Unix timestamp when this session expires, or None."""
+        if not self._path.exists():
+            return None
+        return self._path.stat().st_mtime + _TTL_SECONDS
+
     def invalidate(self) -> None:
         """Delete the saved session file so the next run does a fresh login."""
         if self._path.exists():

@@ -23,6 +23,7 @@ from playwright.async_api import Browser, Page, async_playwright
 
 from app.plugins.base_board import BaseJobBoard, CaptchaDetectedError, JobListing
 from app.services import config_store
+from app.services.session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,36 @@ class IndeedBoard(BaseJobBoard):
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    async def manual_login(self) -> None:
+        """Open a non-headless browser so the user can log in manually, then save cookies."""
+        sm = SessionManager("indeed")
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=False, slow_mo=0)
+            context = await browser.new_context()
+            page = await context.new_page()
+            page.set_default_timeout(300_000)
+
+            await page.goto("https://secure.indeed.com/auth", wait_until="domcontentloaded")
+            logger.info("Indeed: browser open — please log in. Waiting up to 5 minutes…")
+
+            try:
+                await page.wait_for_url(
+                    lambda url: "indeed.com" in url and not any(
+                        p in url for p in ("auth", "login", "signin")
+                    ),
+                    timeout=300_000,
+                )
+            except Exception as exc:
+                await context.close()
+                await browser.close()
+                raise RuntimeError(f"Indeed login timed out or cancelled: {exc}") from exc
+
+            await asyncio.sleep(2)
+            await sm.save(context)
+            await context.close()
+            await browser.close()
+            logger.info("Indeed session saved")
 
     async def is_available(self) -> bool:
         """Return True when indeed.com loads successfully."""
@@ -79,10 +110,15 @@ class IndeedBoard(BaseJobBoard):
     ) -> list[JobListing]:
         """Return up to MAX_APPLICATIONS_PER_RUN listings from Indeed."""
         listings: list[JobListing] = []
+        sm = SessionManager("indeed")
 
         async with async_playwright() as pw:
             browser = await self._launch(pw)
-            context = await browser.new_context()
+            ctx_kwargs = {}
+            if sm.exists_and_fresh():
+                ctx_kwargs["storage_state"] = sm.storage_state_path()
+                logger.debug("Indeed: using saved session for search")
+            context = await browser.new_context(**ctx_kwargs)
             page = await context.new_page()
             page.set_default_timeout(self._timeout)
 
@@ -121,9 +157,14 @@ class IndeedBoard(BaseJobBoard):
             logger.info("Indeed: skipping %s — no Indeed Apply button", job.url)
             return False
 
+        sm = SessionManager("indeed")
         async with async_playwright() as pw:
             browser = await self._launch(pw)
-            context = await browser.new_context()
+            ctx_kwargs = {}
+            if sm.exists_and_fresh():
+                ctx_kwargs["storage_state"] = sm.storage_state_path()
+                logger.debug("Indeed: using saved session for apply")
+            context = await browser.new_context(**ctx_kwargs)
             page = await context.new_page()
             page.set_default_timeout(self._timeout)
 

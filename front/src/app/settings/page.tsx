@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
+  type BoardLoginStatus,
   type Settings,
+  connectBoard,
+  disconnectBoard,
+  fetchBoardLoginStatus,
   fetchSettings,
   updateSettings,
 } from "@/lib/api";
@@ -90,17 +94,92 @@ function SaveButton({ onSave, saved }: { onSave: () => Promise<void>; saved: boo
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+function BoardConnection({ board, label }: { board: string; label: string }) {
+  const [loginStatus, setLoginStatus] = useState<BoardLoginStatus | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchBoardLoginStatus(board).then(setLoginStatus).catch(console.error);
+  }, [board]);
+
+  async function handleConnect() {
+    setConnecting(true);
+    setError(null);
+    try {
+      await connectBoard(board);
+      const status = await fetchBoardLoginStatus(board);
+      setLoginStatus(status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Connection failed");
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    try {
+      await disconnectBoard(board);
+      setLoginStatus((prev) => prev ? { ...prev, connected: false, expires_at: null } : prev);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Disconnect failed");
+    }
+  }
+
+  const expiresAt = loginStatus?.expires_at
+    ? new Date(loginStatus.expires_at).toLocaleString([], { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" })
+    : null;
+
+  return (
+    <div
+      className="flex items-center justify-between p-3 rounded-lg"
+      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}
+    >
+      <div className="space-y-0.5">
+        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{label}</p>
+        {loginStatus?.connected ? (
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Connected · expires {expiresAt}
+          </p>
+        ) : (
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Not connected — bot will search without an account
+          </p>
+        )}
+        {error && <p className="text-xs text-red-400">{error}</p>}
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0 ml-4">
+        {loginStatus?.connected ? (
+          <button
+            type="button"
+            onClick={() => void handleDisconnect()}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity"
+            style={{ background: "rgba(239,68,68,0.12)", color: "#f87171", border: "1px solid rgba(239,68,68,0.3)" }}
+          >
+            Disconnect
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void handleConnect()}
+            disabled={connecting}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-50"
+            style={{ background: "var(--accent)", color: "white" }}
+          >
+            {connecting ? "Waiting for login…" : "Connect"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [llmSaved, setLlmSaved] = useState(false);
   const [botSaved, setBotSaved] = useState(false);
-  const [credsSaved, setCredsSaved] = useState(false);
 
-  // Credentials state
-  const [linkedinEmail, setLinkedinEmail] = useState("");
-  const [linkedinPassword, setLinkedinPassword] = useState("");
-  const [indeedEmail, setIndeedEmail] = useState("");
-  const [indeedPassword, setIndeedPassword] = useState("");
   const [computrabajoCountry, setComputrabajoCountry] = useState("com.co");
 
   // LLM state
@@ -114,7 +193,7 @@ export default function SettingsPage() {
   const [slowMo, setSlowMo] = useState(0);
   const [timeout, setTimeout_] = useState(30);
   const [maxApps, setMaxApps] = useState(10);
-  const [boards, setBoards] = useState<string[]>(["linkedin", "indeed"]);
+  const [boards, setBoards] = useState<string[]>(["indeed", "computrabajo"]);
 
   useEffect(() => {
     fetchSettings().then((s) => {
@@ -130,8 +209,6 @@ export default function SettingsPage() {
       setTimeout_(Math.round(s.playwright_timeout / 1000));
       setMaxApps(s.max_applications_per_run);
       setBoards(s.enabled_boards);
-      setLinkedinEmail(s.linkedin_email);
-      setIndeedEmail(s.indeed_email);
       setComputrabajoCountry(s.computrabajo_country);
     }).catch(console.error);
   }, []);
@@ -155,21 +232,6 @@ export default function SettingsPage() {
     setApiKey("");
     setLlmSaved(true);
     setTimeout(() => setLlmSaved(false), 2000);
-  }
-
-  async function saveCreds() {
-    const updates: Partial<Settings> = {
-      linkedin_email: linkedinEmail,
-      indeed_email: indeedEmail,
-      computrabajo_country: computrabajoCountry,
-    };
-    if (linkedinPassword) updates.linkedin_password = linkedinPassword;
-    if (indeedPassword) updates.indeed_password = indeedPassword;
-    await updateSettings(updates);
-    setLinkedinPassword("");
-    setIndeedPassword("");
-    setCredsSaved(true);
-    setTimeout(() => setCredsSaved(false), 2000);
   }
 
   async function saveBot() {
@@ -267,7 +329,7 @@ export default function SettingsPage() {
       <Section title="Bot Settings">
         <Field label="Job boards">
           <div className="flex gap-4">
-            {["linkedin", "indeed", "computrabajo"].map((board) => (
+            {["indeed", "computrabajo"].map((board) => (
               <label key={board} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -347,62 +409,49 @@ export default function SettingsPage() {
         <SaveButton onSave={saveBot} saved={botSaved} />
       </Section>
 
-      {/* Credentials */}
-      <Section title="Job Board Credentials">
+      {/* Job Board Connections */}
+      <Section title="Job Board Connections">
         <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "var(--hover-bg-strong)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
-          Stored locally. Passwords are masked in the API. Leave password blank to keep the current one.
+          Click Connect to open a browser window and log in with any method (Google, email, OAuth). Session cookies are saved locally for 6 hours — no passwords stored.
         </p>
 
-        <div className="space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>LinkedIn</p>
-          <Field label="Email">
-            <Input value={linkedinEmail} onChange={setLinkedinEmail} placeholder="you@email.com" />
-          </Field>
-          <Field label="Password" hint={settings.linkedin_password ? "Saved — leave blank to keep" : "Not saved"}>
-            <Input type="password" value={linkedinPassword} onChange={setLinkedinPassword} placeholder="Paste to update…" />
-          </Field>
+        <div className="space-y-3">
+          <BoardConnection board="indeed" label="Indeed" />
+          <BoardConnection board="computrabajo" label="Computrabajo" />
         </div>
 
-        <div className="space-y-4 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-          <p className="text-xs font-semibold uppercase tracking-wide pt-2" style={{ color: "var(--text-muted)" }}>Indeed</p>
-          <Field label="Email">
-            <Input value={indeedEmail} onChange={setIndeedEmail} placeholder="you@email.com" />
-          </Field>
-          <Field label="Password" hint={settings.indeed_password ? "Saved — leave blank to keep" : "Not saved"}>
-            <Input type="password" value={indeedPassword} onChange={setIndeedPassword} placeholder="Paste to update…" />
-          </Field>
-        </div>
+        <Field label="Computrabajo country" hint="Domain suffix used for search and apply">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { code: "com.co", label: "Colombia" },
+              { code: "com.mx", label: "México" },
+              { code: "com.ar", label: "Argentina" },
+              { code: "com.pe", label: "Perú" },
+              { code: "cl",     label: "Chile" },
+            ].map(({ code, label }) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setComputrabajoCountry(code)}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                style={{
+                  background: computrabajoCountry === code ? "var(--accent)" : "var(--bg-elevated)",
+                  color: computrabajoCountry === code ? "white" : "var(--text-secondary)",
+                  border: `1px solid ${computrabajoCountry === code ? "var(--accent)" : "var(--border)"}`,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </Field>
 
-        <div className="space-y-4 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-          <p className="text-xs font-semibold uppercase tracking-wide pt-2" style={{ color: "var(--text-muted)" }}>Computrabajo</p>
-          <Field label="Country" hint="Domain suffix — e.g. com.co (Colombia), com.mx (México), com.ar (Argentina)">
-            <div className="flex flex-wrap gap-2">
-              {[
-                { code: "com.co", label: "🇨🇴 Colombia" },
-                { code: "com.mx", label: "🇲🇽 México" },
-                { code: "com.ar", label: "🇦🇷 Argentina" },
-                { code: "com.pe", label: "🇵🇪 Perú" },
-                { code: "cl",     label: "🇨🇱 Chile" },
-              ].map(({ code, label }) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => setComputrabajoCountry(code)}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-                  style={{
-                    background: computrabajoCountry === code ? "var(--accent)" : "var(--bg-elevated)",
-                    color: computrabajoCountry === code ? "white" : "var(--text-secondary)",
-                    border: `1px solid ${computrabajoCountry === code ? "var(--accent)" : "var(--border)"}`,
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </Field>
-        </div>
-
-        <SaveButton onSave={saveCreds} saved={credsSaved} />
+        <SaveButton
+          onSave={async () => {
+            await updateSettings({ computrabajo_country: computrabajoCountry });
+          }}
+          saved={false}
+        />
       </Section>
     </div>
   );

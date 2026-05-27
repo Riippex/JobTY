@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionLocal
 from app.models.db import Job, Profile
 from app.plugins.base_board import BaseJobBoard, CaptchaDetectedError, JobListing
+from app.services import config_store
 from app.services.job_scorer import score_job
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,9 @@ _state: dict = {
 
 
 def _env_max_apps() -> int:
+    cfg = config_store.get("max_applications_per_run")
+    if cfg is not None:
+        return int(cfg)
     return int(os.getenv("MAX_APPLICATIONS_PER_RUN", "5"))
 
 
@@ -63,22 +67,19 @@ def _env_threshold() -> int:
 
 
 def _enabled_boards() -> list[str]:
-    raw = os.getenv("ENABLED_BOARDS", "linkedin,indeed")
+    """Return the list of enabled boards from config_store (Settings UI), falling back to env var."""
+    cfg = config_store.get("enabled_boards")
+    if cfg and isinstance(cfg, list):
+        return [b.strip().lower() for b in cfg if b.strip()]
+    raw = os.getenv("ENABLED_BOARDS", "indeed,computrabajo")
     return [b.strip().lower() for b in raw.split(",") if b.strip()]
 
 
 def _build_plugins() -> list[BaseJobBoard]:
-    """Instantiate plugins for every board listed in ENABLED_BOARDS."""
+    """Instantiate plugins for every board listed in enabled_boards."""
     boards: list[BaseJobBoard] = []
     enabled = _enabled_boards()
-
-    if "linkedin" in enabled:
-        try:
-            from app.plugins.linkedin import LinkedInBoard  # noqa: PLC0415
-            boards.append(LinkedInBoard())
-            logger.debug("LinkedIn plugin loaded")
-        except Exception as exc:
-            logger.warning("Could not load LinkedIn plugin: %s", exc)
+    logger.info("Enabled boards: %s", enabled)
 
     if "indeed" in enabled:
         try:
@@ -87,6 +88,14 @@ def _build_plugins() -> list[BaseJobBoard]:
             logger.debug("Indeed plugin loaded")
         except Exception as exc:
             logger.warning("Could not load Indeed plugin: %s", exc)
+
+    if "computrabajo" in enabled:
+        try:
+            from app.plugins.computrabajo import ComputrabajoBoard  # noqa: PLC0415
+            boards.append(ComputrabajoBoard())
+            logger.debug("Computrabajo plugin loaded")
+        except Exception as exc:
+            logger.warning("Could not load Computrabajo plugin: %s", exc)
 
     return boards
 
