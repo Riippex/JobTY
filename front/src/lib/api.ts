@@ -1,15 +1,17 @@
+import {
+  buildWebSocketUrl as normalizeWebSocketUrl,
+  type AgentRunStatus,
+} from "./feedSync";
+
+export type { AgentRunStatus };
+
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
 
 export function buildWebSocketUrl(baseUrl: string = WS_URL): string {
-  const trimmed = baseUrl.trim().replace(/\/+$/, "");
-  const withWsScheme = trimmed
-    .replace(/^https:\/\//i, "wss://")
-    .replace(/^http:\/\//i, "ws://");
-  const withoutTrailingWs = withWsScheme.replace(/(?:\/ws)+$/i, "");
-  return `${withoutTrailingWs}/ws`;
+  return normalizeWebSocketUrl(baseUrl);
 }
 
 export class ApiError extends Error {
@@ -164,8 +166,6 @@ export function parseCVFromPDF(name: string): Promise<CVParsed> {
 }
 
 // ---- Agent ----
-
-export type AgentRunStatus = "idle" | "running" | "stopping" | "stopped" | "error";
 
 export interface CurrentJob {
   title: string;

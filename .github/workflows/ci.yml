@@ -64,6 +64,10 @@ jobs:
         run: npm run lint
         working-directory: front
 
+      - name: Frontend unit tests
+        run: npm test
+        working-directory: front
+
       - name: Typecheck
         run: npx tsc --noEmit --incremental false
         working-directory: front

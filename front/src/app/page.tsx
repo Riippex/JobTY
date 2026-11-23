@@ -163,7 +163,13 @@ export default function DashboardPage() {
 
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
 
-  const { events, isConnected, clearEvents } = useAgentFeed();
+  const {
+    events,
+    isConnected,
+    clearEvents,
+    jobsRefreshKey,
+    statusRefreshKey,
+  } = useAgentFeed(activeProfile?.name ?? null);
 
   const [agentStatus, setAgentStatus] = useState<AgentStatusResponse | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
@@ -205,18 +211,9 @@ export default function DashboardPage() {
 
   const currentStatus = agentStatus?.status ?? "idle";
   const showWelcome = !profilesLoading && !profilesError && profiles.length === 0;
-  const jobsRefreshKey = events.filter(
-    (ev) =>
-      (ev.profile === null || ev.profile === activeProfile?.name) &&
-      (ev.event === "applied" ||
-        ev.event === "scored" ||
-        ev.event === "done" ||
-        (ev.event === "status" && (ev.status === "stopped" || ev.status === "error")))
-  ).length;
-  const statusEventCount = events.filter((ev) => ev.event === "status").length;
 
   useEffect(() => {
-    if (statusEventCount === 0) return;
+    if (statusRefreshKey === 0) return;
     let cancelled = false;
     fetchAgentStatus()
       .then((s) => {
@@ -228,7 +225,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [statusEventCount]);
+  }, [statusRefreshKey]);
 
   // Suppress unused warning — statusLoading used for future skeleton state
   void statusLoading;

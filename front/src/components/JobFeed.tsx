@@ -12,6 +12,7 @@ interface JobFeedProps {
 }
 
 interface FeedState {
+  profile: string | null;
   requestKey: string | null;
   jobs: Job[];
   error: string | null;
@@ -114,6 +115,7 @@ function formatJobsError(err: unknown): string {
 export default function JobFeed({ activeProfileName, refreshKey = 0 }: JobFeedProps) {
   const [manualRefresh, setManualRefresh] = useState(0);
   const [state, setState] = useState<FeedState>({
+    profile: null,
     requestKey: null,
     jobs: [],
     error: null,
@@ -132,12 +134,17 @@ export default function JobFeed({ activeProfileName, refreshKey = 0 }: JobFeedPr
     fetchJobs(activeProfileName)
       .then((data) => {
         if (!cancelled) {
-          setState({ requestKey, jobs: data, error: null });
+          setState({ profile: activeProfileName, requestKey, jobs: data, error: null });
         }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setState({ requestKey, jobs: [], error: formatJobsError(err) });
+          setState({
+            profile: activeProfileName,
+            requestKey,
+            jobs: [],
+            error: formatJobsError(err),
+          });
         }
       });
 
@@ -146,9 +153,10 @@ export default function JobFeed({ activeProfileName, refreshKey = 0 }: JobFeedPr
     };
   }, [activeProfileName, requestKey]);
 
-  const loading = requestKey !== null && state.requestKey !== requestKey;
-  const jobs = requestKey !== null && state.requestKey === requestKey ? state.jobs : [];
-  const error = requestKey !== null && state.requestKey === requestKey ? state.error : null;
+  const isPending = requestKey !== null && state.requestKey !== requestKey;
+  const loading = isPending && (state.profile !== activeProfileName || state.error !== null);
+  const jobs = state.profile === activeProfileName ? state.jobs : [];
+  const error = state.profile === activeProfileName && !loading ? state.error : null;
 
   const filters: FilterType[] = ["all", "applied", "skipped", "pending", "error"];
   const filtered = filter === "all" ? jobs : jobs.filter((j) => j.status === filter);
