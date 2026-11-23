@@ -16,6 +16,8 @@ interface AgentStatusProps {
 
 function eventColor(event: AgentEvent["event"]): string {
   switch (event) {
+    case "status":
+      return "text-sky-400";
     case "job_found":
       return "text-neutral-400";
     case "applying":
@@ -37,13 +39,22 @@ function eventColor(event: AgentEvent["event"]): string {
 
 function eventLabel(ev: AgentEvent): string {
   switch (ev.event) {
+    case "status": {
+      const profileSuffix = ev.profile ? ` (${ev.profile})` : "";
+      return `Agent ${ev.status}${profileSuffix} — ${ev.jobs_applied} applied`;
+    }
     case "job_found":
       return `Found: ${ev.title} at ${ev.company}`;
     case "applying":
-      return `Applying to ${ev.company}`;
-    case "scored":
+      return ev.title
+        ? `Applying: ${ev.title} at ${ev.company}`
+        : `Applying to ${ev.company}`;
+    case "scored": {
       const reasonText = ev.reasons && ev.reasons.length > 0 ? ` — ${ev.reasons[0]}` : "";
-      return `Score ${ev.score}/100 (${ev.recommendation.toUpperCase()}): ${ev.title} at ${ev.company}${reasonText}`;
+      const scoreText = ev.score !== null ? `Score ${ev.score}/100` : "Unscored";
+      const recText = ev.recommendation ? ` (${ev.recommendation.toUpperCase()})` : "";
+      return `${scoreText}${recText}: ${ev.title} at ${ev.company}${reasonText}`;
+    }
     case "applied":
       return `Applied: ${ev.title} at ${ev.company}`;
     case "skipped":
@@ -57,12 +68,23 @@ function eventLabel(ev: AgentEvent): string {
   }
 }
 
-function formatTime(ts: number): string {
-  return new Date(ts < 1e12 ? ts * 1000 : ts).toLocaleTimeString([], {
+function formatTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "       ";
+  return date.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function isSafeHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export default function AgentStatus({
@@ -90,7 +112,7 @@ export default function AgentStatus({
   const isStopping = agentStatus === "stopping";
 
   const appliedCount =
-    events.filter((e) => e.event === "applied").length;
+    status?.jobs_applied ?? events.filter((e) => e.event === "applied").length;
 
   async function handleToggle() {
     setActionLoading(true);
@@ -116,6 +138,7 @@ export default function AgentStatus({
     idle: "bg-neutral-800 text-neutral-400",
     running: "bg-green-500/20 text-green-400",
     stopping: "bg-yellow-500/20 text-yellow-400",
+    stopped: "bg-neutral-800 text-neutral-300",
     error: "bg-red-500/20 text-red-400",
   };
 
@@ -194,13 +217,38 @@ export default function AgentStatus({
       {/* Current job */}
       {status?.current_job && (
         <div
-          className="px-4 py-2 border-b text-xs"
+          className="px-4 py-2 border-b text-xs flex items-center justify-between gap-3"
           style={{
             borderColor: "var(--border)",
             color: "var(--text-secondary)",
           }}
         >
-          Processing: <span style={{ color: "var(--text-primary)" }}>{status.current_job}</span>
+          <span className="truncate">
+            Processing:{" "}
+            <span style={{ color: "var(--text-primary)" }}>
+              {status.current_job.title}
+            </span>
+            {status.current_job.company && (
+              <>
+                {" "}
+                at{" "}
+                <span style={{ color: "var(--text-primary)" }}>
+                  {status.current_job.company}
+                </span>
+              </>
+            )}
+          </span>
+          {status.current_job.url && isSafeHttpUrl(status.current_job.url) && (
+            <a
+              href={status.current_job.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 hover:underline"
+              style={{ color: "var(--accent-light)" }}
+            >
+              Open listing →
+            </a>
+          )}
         </div>
       )}
 
@@ -252,7 +300,7 @@ export default function AgentStatus({
               } ${eventColor(ev.event)}`}
             >
               <span className="shrink-0 mt-0.5 opacity-70">
-                {"ts" in ev && ev.ts ? formatTime(ev.ts as number) : "       "}
+                {ev.timestamp ? formatTime(ev.timestamp) : "       "}
               </span>
               <span className="shrink-0 w-3 text-center font-bold">
                 {ev.event === "applied"
@@ -267,6 +315,8 @@ export default function AgentStatus({
                   ? "★"
                   : ev.event === "job_found"
                   ? "◎"
+                  : ev.event === "status"
+                  ? "●"
                   : "·"}
               </span>
               <span className="break-all leading-relaxed">{eventLabel(ev)}</span>

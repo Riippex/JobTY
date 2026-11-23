@@ -10,6 +10,7 @@ from app.database import init_db
 from app.routers import cv
 from app.routers import settings as settings_router
 from app.routers.agent import router as agent_router
+from app.routers.jobs import router as jobs_router
 from app.routers.profiles import router as profiles_router
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 app.include_router(profiles_router, prefix="/profiles")
 app.include_router(cv.router, prefix="/cv", tags=["cv"])
 app.include_router(agent_router, prefix="/agent")
+app.include_router(jobs_router, prefix="/jobs")
 app.include_router(settings_router.router, prefix="/settings", tags=["settings"])
 
 
@@ -108,7 +110,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     Clients connect here and receive JSON messages for every significant
     step the agent takes:
 
-        {"type": "job_found"|"job_scored"|"applied"|"skipped"|"error"|"status",
+        {"type": "job_found"|"job_scored"|"applying"|"applied"|"skipped"|"error"|"status",
+         "profile": "<profile_name>"|null,
          "data": {...},
          "timestamp": "<ISO-8601>"}
     """

@@ -3,6 +3,15 @@ export const API_URL =
 export const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
 
+export function buildWebSocketUrl(baseUrl: string = WS_URL): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  const withWsScheme = trimmed
+    .replace(/^https:\/\//i, "wss://")
+    .replace(/^http:\/\//i, "ws://");
+  const withoutTrailingWs = withWsScheme.replace(/(?:\/ws)+$/i, "");
+  return `${withoutTrailingWs}/ws`;
+}
+
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -32,6 +41,10 @@ async function apiFetch<T>(
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new ApiError(res.status, parseErrorBody(res.status, res.statusText, body));
+  }
+
+  if (res.status === 204) {
+    return undefined as T;
   }
 
   return res.json() as Promise<T>;
@@ -152,12 +165,22 @@ export function parseCVFromPDF(name: string): Promise<CVParsed> {
 
 // ---- Agent ----
 
+export type AgentRunStatus = "idle" | "running" | "stopping" | "stopped" | "error";
+
+export interface CurrentJob {
+  title: string;
+  company: string;
+  url: string;
+  source?: string | null;
+}
+
 export interface AgentStatusResponse {
-  status: "idle" | "running" | "stopping" | "error";
-  current_job: string | null;
+  status: AgentRunStatus;
+  current_job: CurrentJob | null;
   jobs_applied: number;
   errors: string[];
   started_at: string | null;
+  stopped_at: string | null;
   profile: string | null;
 }
 
@@ -165,15 +188,15 @@ export function fetchAgentStatus(): Promise<AgentStatusResponse> {
   return apiFetch<AgentStatusResponse>("/agent/status");
 }
 
-export function startAgent(profile_name: string): Promise<{ ok: boolean }> {
-  return apiFetch<{ ok: boolean }>("/agent/start", {
+export function startAgent(profile_name: string): Promise<{ detail: string }> {
+  return apiFetch<{ detail: string }>("/agent/start", {
     method: "POST",
     body: JSON.stringify({ profile_name }),
   });
 }
 
-export function stopAgent(): Promise<{ ok: boolean }> {
-  return apiFetch<{ ok: boolean }>("/agent/stop", { method: "POST" });
+export function stopAgent(): Promise<{ detail: string }> {
+  return apiFetch<{ detail: string }>("/agent/stop", { method: "POST" });
 }
 
 // ---- Settings ----
@@ -227,17 +250,21 @@ export function updateSettings(data: Partial<Settings>): Promise<Settings> {
   });
 }
 
-// ---- Jobs (optional endpoint) ----
+// ---- Jobs ----
+
+export type JobStatus = "applied" | "skipped" | "pending" | "error";
 
 export interface Job {
-  id: string;
+  id: number;
+  profile_id: number;
   title: string;
   company: string;
   url: string;
-  score: number;
-  status: "applied" | "skipped" | "pending" | "error";
+  score: number | null;
+  status: JobStatus;
+  reason: string | null;
   applied_at: string | null;
-  reason: string;
+  created_at: string;
 }
 
 export function fetchJobs(profileName: string): Promise<Job[]> {

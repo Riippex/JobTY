@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   backend-lint:
@@ -17,16 +17,35 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: back/requirements.txt
+          cache-dependency-path: back/requirements-test.txt
 
       - name: Install ruff
         run: pip install ruff
 
       - name: Lint
-        run: ruff check back/app/
+        run: ruff check back/app/ back/tests/
+
+  backend-tests:
+    name: Backend behavior tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: back/requirements-test.txt
+
+      - name: Install test dependencies
+        run: pip install -r back/requirements-test.txt
+
+      - name: Run pytest
+        working-directory: back
+        run: pytest -v
 
   frontend-build:
-    name: Frontend typecheck and build
+    name: Frontend lint, typecheck and build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +58,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        working-directory: front
+
+      - name: Lint
+        run: npm run lint
+        working-directory: front
+
+      - name: Typecheck
+        run: npx tsc --noEmit --incremental false
         working-directory: front
 
       - name: Build

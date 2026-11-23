@@ -5,11 +5,15 @@ bot can reuse authenticated sessions across runs without logging in every
 time, which drastically reduces CAPTCHA exposure.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from playwright.async_api import BrowserContext
+if TYPE_CHECKING:
+    from playwright.async_api import BrowserContext
 
 logger = logging.getLogger(__name__)
 

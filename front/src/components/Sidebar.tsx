@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Profile } from "@/lib/api";
+import type { AgentRunStatus, Profile } from "@/lib/api";
 
 interface SidebarProps {
   profiles: Profile[];
   activeProfile: Profile | null;
-  agentStatus: "idle" | "running" | "stopping" | "error";
+  agentStatus: AgentRunStatus;
   loading: boolean;
   onActivate: (name: string) => Promise<void>;
   onDelete: (name: string) => Promise<void>;
@@ -25,17 +25,19 @@ export default function Sidebar({
 }: SidebarProps) {
   const router = useRouter();
 
-  const statusColor: Record<string, string> = {
+  const statusColor: Record<AgentRunStatus, string> = {
     idle: "bg-neutral-500",
     running: "bg-green-500",
     stopping: "bg-yellow-500",
+    stopped: "bg-neutral-400",
     error: "bg-red-500",
   };
 
-  const statusLabel: Record<string, string> = {
+  const statusLabel: Record<AgentRunStatus, string> = {
     idle: "Idle",
     running: "Running",
     stopping: "Stopping",
+    stopped: "Stopped",
     error: "Error",
   };
 

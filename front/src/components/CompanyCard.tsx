@@ -25,16 +25,17 @@ export default function CompanyCard({
   jobUrl,
   jobTitle,
 }: CompanyCardProps) {
-  const [research, setResearch] = useState<CompanyResearch | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const requestKey = company ? `${company}::${jobUrl ?? ""}` : null;
+  const [state, setState] = useState<{
+    key: string | null;
+    research: CompanyResearch | null;
+    error: string | null;
+  }>({ key: null, research: null, error: null });
 
   useEffect(() => {
-    if (!company) return;
+    if (!company || !requestKey) return;
 
-    setLoading(true);
-    setError(null);
-
+    let cancelled = false;
     const params = new URLSearchParams({ company });
     if (jobUrl) params.set("job_url", jobUrl);
 
@@ -43,23 +44,43 @@ export default function CompanyCard({
         if (!res.ok) throw new Error(`${res.status}`);
         return res.json() as Promise<CompanyResearch>;
       })
-      .then(setResearch)
-      .catch((err: unknown) => {
-        // 404 = researcher not implemented yet, show basic info
-        if (err instanceof Error && err.message === "404") {
-          setResearch({
-            company,
-            summary: "Company research not yet available.",
-            culture: [],
-            tech_stack: [],
-            red_flags: [],
-          });
-        } else {
-          setError("Could not load company research");
+      .then((data) => {
+        if (!cancelled) {
+          setState({ key: requestKey, research: data, error: null });
         }
       })
-      .finally(() => setLoading(false));
-  }, [company, jobUrl]);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        // 404 = researcher not implemented yet, show basic info
+        if (err instanceof Error && err.message === "404") {
+          setState({
+            key: requestKey,
+            research: {
+              company,
+              summary: "Company research not yet available.",
+              culture: [],
+              tech_stack: [],
+              red_flags: [],
+            },
+            error: null,
+          });
+        } else {
+          setState({
+            key: requestKey,
+            research: null,
+            error: "Could not load company research",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [company, jobUrl, requestKey]);
+
+  const loading = requestKey !== null && state.key !== requestKey;
+  const research = requestKey !== null && state.key === requestKey ? state.research : null;
+  const error = requestKey !== null && state.key === requestKey ? state.error : null;
 
   if (loading) {
     return (

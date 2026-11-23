@@ -155,6 +155,7 @@ export default function DashboardPage() {
     profiles,
     activeProfile,
     loading: profilesLoading,
+    error: profilesError,
     activateProfile,
     deleteProfile,
     refresh,
@@ -203,7 +204,31 @@ export default function DashboardPage() {
   }
 
   const currentStatus = agentStatus?.status ?? "idle";
-  const showWelcome = !profilesLoading && profiles.length === 0;
+  const showWelcome = !profilesLoading && !profilesError && profiles.length === 0;
+  const jobsRefreshKey = events.filter(
+    (ev) =>
+      (ev.profile === null || ev.profile === activeProfile?.name) &&
+      (ev.event === "applied" ||
+        ev.event === "scored" ||
+        ev.event === "done" ||
+        (ev.event === "status" && (ev.status === "stopped" || ev.status === "error")))
+  ).length;
+  const statusEventCount = events.filter((ev) => ev.event === "status").length;
+
+  useEffect(() => {
+    if (statusEventCount === 0) return;
+    let cancelled = false;
+    fetchAgentStatus()
+      .then((s) => {
+        if (!cancelled) setAgentStatus(s);
+      })
+      .catch(() => {
+        // Polling remains active if immediate refresh fails
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [statusEventCount]);
 
   // Suppress unused warning — statusLoading used for future skeleton state
   void statusLoading;
@@ -221,7 +246,26 @@ export default function DashboardPage() {
       />
 
       <main className="flex-1 flex flex-col gap-4 p-6 overflow-y-auto">
-        {showWelcome ? (
+        {profilesError ? (
+          <div
+            className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 flex items-center justify-between gap-4"
+            role="alert"
+          >
+            <div>
+              <h2 className="text-sm font-semibold text-red-300">
+                Could not connect to JobTY API
+              </h2>
+              <p className="text-xs text-red-200/80 mt-1">{profilesError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-400/40 text-red-200 hover:bg-red-500/20 shrink-0"
+            >
+              Retry
+            </button>
+          </div>
+        ) : showWelcome ? (
           <WelcomeScreen />
         ) : (
           <>
@@ -234,7 +278,10 @@ export default function DashboardPage() {
               onStop={handleStop}
               onClearEvents={clearEvents}
             />
-            <JobFeed activeProfileName={activeProfile?.name ?? null} />
+            <JobFeed
+              activeProfileName={activeProfile?.name ?? null}
+              refreshKey={jobsRefreshKey}
+            />
           </>
         )}
       </main>

@@ -1,14 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { Job } from "@/lib/api";
-import { fetchJobs } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { ApiError, fetchJobs, type Job, type JobStatus } from "@/lib/api";
 import CompanyCard from "./CompanyCard";
 
-type FilterType = "all" | "applied" | "skipped" | "pending" | "error";
+type FilterType = "all" | JobStatus;
 
 interface JobFeedProps {
   activeProfileName: string | null;
+  refreshKey?: number;
+}
+
+interface FeedState {
+  requestKey: string | null;
+  jobs: Job[];
+  error: string | null;
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -55,7 +61,15 @@ function IconSkip() {
 
 // ── Badges ────────────────────────────────────────────────────────────────────
 
-function ScoreBadge({ score }: { score: number }) {
+function ScoreBadge({ score }: { score: number | null }) {
+  if (score === null) {
+    return (
+      <span className="text-xs font-medium px-2 py-0.5 rounded-full text-neutral-400 bg-neutral-500/10">
+        Unscored
+      </span>
+    );
+  }
+
   let colorClass = "text-red-400 bg-red-500/10";
   if (score >= 70) colorClass = "text-green-400 bg-green-500/10";
   else if (score >= 45) colorClass = "text-yellow-400 bg-yellow-500/10";
@@ -67,8 +81,8 @@ function ScoreBadge({ score }: { score: number }) {
   );
 }
 
-function StatusBadge({ status }: { status: Job["status"] }) {
-  const styles: Record<Job["status"], string> = {
+function StatusBadge({ status }: { status: JobStatus }) {
+  const styles: Record<JobStatus, string> = {
     applied: "text-green-400 bg-green-500/10",
     skipped: "text-orange-400 bg-orange-500/10",
     pending: "text-neutral-400 bg-neutral-500/10",
@@ -82,39 +96,59 @@ function StatusBadge({ status }: { status: Job["status"] }) {
   );
 }
 
+function formatJobsError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 404) {
+      if (err.message === "Not Found" || err.message.startsWith("404 ")) {
+        return "Jobs API unavailable (404): could not load job history.";
+      }
+      return err.message;
+    }
+    return `Failed to load jobs (${err.status}): ${err.message}`;
+  }
+  return err instanceof Error ? err.message : "Failed to load jobs";
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function JobFeed({ activeProfileName }: JobFeedProps) {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export default function JobFeed({ activeProfileName, refreshKey = 0 }: JobFeedProps) {
+  const [manualRefresh, setManualRefresh] = useState(0);
+  const [state, setState] = useState<FeedState>({
+    requestKey: null,
+    jobs: [],
+    error: null,
+  });
   const [filter, setFilter] = useState<FilterType>("all");
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
-    if (!activeProfileName) {
-      setJobs([]);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchJobs(activeProfileName);
-      setJobs(data);
-    } catch (err) {
-      if (err instanceof Error && err.message.startsWith("404")) {
-        setJobs([]);
-      } else {
-        setError(err instanceof Error ? err.message : "Failed to load jobs");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [activeProfileName]);
+  const requestKey = activeProfileName
+    ? `${activeProfileName}:${refreshKey}:${manualRefresh}`
+    : null;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!activeProfileName || !requestKey) return;
+
+    let cancelled = false;
+    fetchJobs(activeProfileName)
+      .then((data) => {
+        if (!cancelled) {
+          setState({ requestKey, jobs: data, error: null });
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setState({ requestKey, jobs: [], error: formatJobsError(err) });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProfileName, requestKey]);
+
+  const loading = requestKey !== null && state.requestKey !== requestKey;
+  const jobs = requestKey !== null && state.requestKey === requestKey ? state.jobs : [];
+  const error = requestKey !== null && state.requestKey === requestKey ? state.error : null;
 
   const filters: FilterType[] = ["all", "applied", "skipped", "pending", "error"];
   const filtered = filter === "all" ? jobs : jobs.filter((j) => j.status === filter);
@@ -166,7 +200,8 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
           </span>
         </div>
         <button
-          onClick={() => void load()}
+          type="button"
+          onClick={() => setManualRefresh((c) => c + 1)}
           className="text-xs px-2 py-1 rounded transition-colors hover:bg-(--hover-bg-strong)"
           style={{ color: "var(--text-muted)" }}
         >
@@ -185,6 +220,7 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
           return (
             <button
               key={f}
+              type="button"
               onClick={() => setFilter(f)}
               className="text-xs px-3 py-1.5 rounded-lg font-medium capitalize transition-colors whitespace-nowrap"
               style={
@@ -211,7 +247,16 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
         )}
 
         {!loading && error && (
-          <div className="px-4 py-3 text-sm text-red-400">{error}</div>
+          <div className="px-4 py-4 flex items-center justify-between gap-3 text-sm text-red-400">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => setManualRefresh((c) => c + 1)}
+              className="text-xs px-2.5 py-1 rounded border border-red-500/30 hover:bg-red-500/10 shrink-0"
+            >
+              Retry
+            </button>
+          </div>
         )}
 
         {!loading && !error && filtered.length === 0 && (
@@ -236,7 +281,7 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
               <li
                 key={job.id}
                 className="px-4 py-3 hover:bg-(--hover-bg) transition-colors cursor-pointer"
-                onClick={() => setSelectedJob(selectedJob?.id === job.id ? null : job)}
+                onClick={() => setSelectedJobId(selectedJobId === job.id ? null : job.id)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -247,7 +292,7 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
                       <ScoreBadge score={job.score} />
                     </div>
                     <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                      {job.company}
+                      {job.company || "Unknown company"}
                     </p>
                     {job.reason && (
                       <p className="text-xs mt-1 line-clamp-2" style={{ color: "var(--text-muted)" }}>
@@ -265,7 +310,7 @@ export default function JobFeed({ activeProfileName }: JobFeedProps) {
                   </div>
                 </div>
 
-                {selectedJob?.id === job.id && (
+                {selectedJobId === job.id && (
                   <div className="mt-3" onClick={(e) => e.stopPropagation()}>
                     <CompanyCard company={job.company} jobUrl={job.url} jobTitle={job.title} />
                   </div>

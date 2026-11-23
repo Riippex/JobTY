@@ -28,12 +28,6 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Hint({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-xs" style={{ color: "var(--text-muted)" }}>{children}</p>
-  );
-}
-
 function TagInput({
   tags,
   onAdd,
@@ -217,7 +211,7 @@ const EMPTY_CV: CVParsed = {
 
 function CVSummaryTab({ profileName }: { profileName: string }) {
   const [cv, setCv] = useState<CVParsed>(EMPTY_CV);
-  const [loading, setLoading] = useState(true);
+  const [loadedProfile, setLoadedProfile] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -225,18 +219,32 @@ function CVSummaryTab({ profileName }: { profileName: string }) {
   const [notParsed, setNotParsed] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
     fetchCVParsed(profileName)
-      .then((data) => { setCv(data); setNotParsed(false); })
+      .then((data) => {
+        if (cancelled) return;
+        setCv(data);
+        setNotParsed(false);
+        setError(null);
+        setLoadedProfile(profileName);
+      })
       .catch((err: unknown) => {
+        if (cancelled) return;
         if (err instanceof ApiError && err.status === 404) {
           setNotParsed(true);
+          setError(null);
         } else {
           setError(err instanceof Error ? err.message : "Failed to load CV summary");
         }
-      })
-      .finally(() => setLoading(false));
+        setLoadedProfile(profileName);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [profileName]);
+
+  const loading = loadedProfile !== profileName;
 
   async function handleParse() {
     setParsing(true);

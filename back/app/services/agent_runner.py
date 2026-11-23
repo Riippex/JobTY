@@ -118,6 +118,24 @@ def _ts() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _build_event(
+    event_type: str,
+    data: dict,
+    profile: str | None = None,
+) -> dict:
+    """Build a standard WebSocket event envelope with profile context."""
+    resolved_profile = profile if profile is not None else _state["profile"]
+    payload = dict(data)
+    if resolved_profile is not None and "profile" not in payload:
+        payload["profile"] = resolved_profile
+    return {
+        "type": event_type,
+        "profile": resolved_profile,
+        "data": payload,
+        "timestamp": _ts(),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -125,9 +143,10 @@ def _ts() -> str:
 
 def get_status() -> dict:
     """Return a snapshot of the current agent state."""
+    current_job = _state["current_job"]
     return {
         "status": _state["status"],
-        "current_job": _state["current_job"],
+        "current_job": dict(current_job) if isinstance(current_job, dict) else None,
         "jobs_applied": _state["jobs_applied"],
         "errors": list(_state["errors"]),
         "started_at": _state["started_at"],
@@ -142,11 +161,10 @@ async def stop_agent() -> None:
         _state["status"] = "stopping"
         logger.info("Agent stop requested")
         await _broadcast(
-            {
-                "type": "status",
-                "data": {"status": "stopping", "jobs_applied": _state["jobs_applied"]},
-                "timestamp": _ts(),
-            }
+            _build_event(
+                "status",
+                {"status": "stopping", "jobs_applied": _state["jobs_applied"]},
+            )
         )
 
 
@@ -177,11 +195,11 @@ async def start_agent(profile_name: str) -> None:
     )
 
     await _broadcast(
-        {
-            "type": "status",
-            "data": {"status": "running", "jobs_applied": 0},
-            "timestamp": _ts(),
-        }
+        _build_event(
+            "status",
+            {"status": "running", "jobs_applied": 0},
+            profile=profile_name,
+        )
     )
     logger.info("Agent started for profile '%s'", profile_name)
 
@@ -193,25 +211,26 @@ async def start_agent(profile_name: str) -> None:
         _state["status"] = "error"
         _state["errors"].append(str(exc))
         await _broadcast(
-            {
-                "type": "error",
-                "data": {"message": f"Agent crashed: {exc}"},
-                "timestamp": _ts(),
-            }
+            _build_event(
+                "error",
+                {"message": f"Agent crashed: {exc}"},
+                profile=profile_name,
+            )
         )
     finally:
         if _state["status"] not in ("error",):
             _state["status"] = "stopped"
+        _state["current_job"] = None
         _state["stopped_at"] = _ts()
         await _broadcast(
-            {
-                "type": "status",
-                "data": {
+            _build_event(
+                "status",
+                {
                     "status": _state["status"],
                     "jobs_applied": _state["jobs_applied"],
                 },
-                "timestamp": _ts(),
-            }
+                profile=profile_name,
+            )
         )
         logger.info(
             "Agent finished — status=%s jobs_applied=%d",
@@ -249,11 +268,11 @@ async def _run_loop(profile_name: str, db: AsyncSession) -> None:
     if not plugins:
         logger.warning("No job-board plugins available — agent will not run")
         await _broadcast(
-            {
-                "type": "error",
-                "data": {"message": "No job-board plugins available"},
-                "timestamp": _ts(),
-            }
+            _build_event(
+                "error",
+                {"message": "No job-board plugins available"},
+                profile=profile_name,
+            )
         )
         return
 
@@ -278,11 +297,7 @@ async def _run_loop(profile_name: str, db: AsyncSession) -> None:
             logger.warning("CAPTCHA on %s — stopping agent: %s", board_name, exc)
             _state["errors"].append(str(exc))
             await _broadcast(
-                {
-                    "type": "error",
-                    "data": {"message": str(exc)},
-                    "timestamp": _ts(),
-                }
+                _build_event("error", {"message": str(exc)}, profile=profile_name)
             )
             _state["status"] = "stopping"
             break
@@ -290,11 +305,11 @@ async def _run_loop(profile_name: str, db: AsyncSession) -> None:
             logger.error("Search on %s failed: %s", board_name, exc)
             _state["errors"].append(str(exc))
             await _broadcast(
-                {
-                    "type": "error",
-                    "data": {"message": f"{board_name} search error: {exc}"},
-                    "timestamp": _ts(),
-                }
+                _build_event(
+                    "error",
+                    {"message": f"{board_name} search error: {exc}"},
+                    profile=profile_name,
+                )
             )
             continue
 
@@ -320,18 +335,23 @@ async def _process_job(
     profile_name = profile.name
 
     # Announce discovery
-    _state["current_job"] = {"title": job.title, "company": job.company, "url": job.url}
+    _state["current_job"] = {
+        "title": job.title,
+        "company": job.company,
+        "url": job.url,
+        "source": job.source or None,
+    }
     await _broadcast(
-        {
-            "type": "job_found",
-            "data": {
+        _build_event(
+            "job_found",
+            {
                 "title": job.title,
                 "company": job.company,
                 "url": job.url,
                 "source": job.source,
             },
-            "timestamp": _ts(),
-        }
+            profile=profile_name,
+        )
     )
 
     # Score
@@ -349,32 +369,34 @@ async def _process_job(
         job_score = JobScore(score=0, reasons=[], concerns=[str(exc)], recommendation="skip")
 
     await _broadcast(
-        {
-            "type": "job_scored",
-            "data": {
+        _build_event(
+            "job_scored",
+            {
                 "title": job.title,
                 "company": job.company,
+                "url": job.url,
                 "score": job_score.score,
                 "recommendation": job_score.recommendation,
                 "reasons": job_score.reasons,
                 "concerns": job_score.concerns,
             },
-            "timestamp": _ts(),
-        }
+            profile=profile_name,
+        )
     )
 
     if job_score.score < threshold:
         await _broadcast(
-            {
-                "type": "skipped",
-                "data": {
+            _build_event(
+                "skipped",
+                {
                     "title": job.title,
                     "company": job.company,
+                    "url": job.url,
                     "score": job_score.score,
                     "reason": "score too low",
                 },
-                "timestamp": _ts(),
-            }
+                profile=profile_name,
+            )
         )
         logger.info(
             "Skipped '%s' @ %s (score=%d < threshold=%d)",
@@ -390,24 +412,25 @@ async def _process_job(
     if board is not None:
         try:
             await _broadcast(
-                {
-                    "type": "applying",
-                    "data": {
+                _build_event(
+                    "applying",
+                    {
+                        "title": job.title,
                         "company": job.company,
                         "url": job.url,
                     },
-                    "timestamp": _ts(),
-                }
+                    profile=profile_name,
+                )
             )
             applied = await board.apply(job, cv_path, profile_data)
         except CaptchaDetectedError as exc:
             _state["errors"].append(str(exc))
             await _broadcast(
-                {
-                    "type": "error",
-                    "data": {"message": str(exc), "job_url": job.url},
-                    "timestamp": _ts(),
-                }
+                _build_event(
+                    "error",
+                    {"message": str(exc), "job_url": job.url},
+                    profile=profile_name,
+                )
             )
             _state["status"] = "stopping"
             return
@@ -415,11 +438,11 @@ async def _process_job(
             logger.error("Apply failed for %s: %s", job.url, exc)
             _state["errors"].append(str(exc))
             await _broadcast(
-                {
-                    "type": "error",
-                    "data": {"message": str(exc), "job_url": job.url},
-                    "timestamp": _ts(),
-                }
+                _build_event(
+                    "error",
+                    {"message": str(exc), "job_url": job.url},
+                    profile=profile_name,
+                )
             )
     else:
         logger.warning("No board available to apply via source='%s'", board_name)
@@ -431,16 +454,16 @@ async def _process_job(
         await _persist_application(job, profile, job_score.score, db)
 
         await _broadcast(
-            {
-                "type": "applied",
-                "data": {
+            _build_event(
+                "applied",
+                {
                     "title": job.title,
                     "company": job.company,
                     "url": job.url,
                     "score": job_score.score,
                 },
-                "timestamp": _ts(),
-            }
+                profile=profile_name,
+            )
         )
         logger.info(
             "Applied to '%s' @ %s (score=%d) — total=%d",
@@ -448,16 +471,17 @@ async def _process_job(
         )
     else:
         await _broadcast(
-            {
-                "type": "skipped",
-                "data": {
+            _build_event(
+                "skipped",
+                {
                     "title": job.title,
                     "company": job.company,
+                    "url": job.url,
                     "score": job_score.score,
                     "reason": "apply returned False (no compatible form)",
                 },
-                "timestamp": _ts(),
-            }
+                profile=profile_name,
+            )
         )
 
 

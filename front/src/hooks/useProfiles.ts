@@ -43,8 +43,29 @@ export function useProfiles(): UseProfilesResult {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    fetchProfiles()
+      .then((data) => {
+        if (!cancelled) {
+          setProfiles(data);
+          setError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load profiles");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const createProfile = useCallback(
     async (name: string, preferences: Preferences): Promise<Profile> => {

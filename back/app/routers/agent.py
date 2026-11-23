@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.db import Profile
-from app.services.agent_runner import get_status, start_agent, stop_agent
+from app.services.agent_runner import AgentStatus, get_status, start_agent, stop_agent
 from app.services.session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
@@ -33,9 +33,16 @@ class StartRequest(BaseModel):
     profile_name: str
 
 
+class CurrentJobInfo(BaseModel):
+    title: str
+    company: str
+    url: str
+    source: str | None = None
+
+
 class AgentStatusResponse(BaseModel):
-    status: str
-    current_job: dict | None
+    status: AgentStatus
+    current_job: CurrentJobInfo | None
     jobs_applied: int
     errors: list[str]
     started_at: str | None
@@ -144,7 +151,7 @@ async def login_board(board: str) -> dict:
         elif board == "computrabajo":
             from app.plugins.computrabajo import ComputrabajoBoard  # noqa: PLC0415
             await asyncio.wait_for(ComputrabajoBoard().manual_login(), timeout=310)
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise HTTPException(
             status_code=status.HTTP_408_REQUEST_TIMEOUT,
             detail="Login window timed out — please try again",
