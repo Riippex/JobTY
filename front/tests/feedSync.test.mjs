@@ -21,8 +21,8 @@ const feedSync = await import(
 
 const {
   MAX_EVENTS,
+  applyFeedConnect,
   applyFeedEvent,
-  applyFeedReconnect,
   buildWebSocketUrl,
   clearFeedEvents,
   connectAgentFeedSocket,
@@ -96,8 +96,8 @@ function createDashboardHarness(activeProfile, backendJobsByProfile) {
     onConnectionChange: (isConn) => {
       connected = isConn;
     },
-    onReconnect: () => {
-      state = applyFeedReconnect(state);
+    onConnect: () => {
+      state = applyFeedConnect(state);
       syncJobFeed();
     },
     onEvent: (ev) => {
@@ -191,6 +191,7 @@ test("Scenario 1: 201st applied event refreshes history even though event buffer
   const backendStore = { alice: [] };
   const harness = createDashboardHarness("alice", backendStore);
   harness.sockets[0].open();
+  const baseKey = getProfileJobsRefreshKey(harness.state, "alice");
 
   for (let i = 1; i <= MAX_EVENTS; i += 1) {
     backendStore.alice.push({ id: i, title: `Job ${i}`, status: "applied" });
@@ -209,7 +210,7 @@ test("Scenario 1: 201st applied event refreshes history even though event buffer
   }
 
   assert.equal(harness.state.events.length, MAX_EVENTS);
-  assert.equal(getProfileJobsRefreshKey(harness.state, "alice"), MAX_EVENTS);
+  assert.equal(getProfileJobsRefreshKey(harness.state, "alice"), baseKey + MAX_EVENTS);
   const fetchesAt200 = harness.fetchCount;
   assert.equal(harness.loadedJobs.length, MAX_EVENTS);
 
@@ -230,7 +231,10 @@ test("Scenario 1: 201st applied event refreshes history even though event buffer
   });
 
   assert.equal(harness.state.events.length, MAX_EVENTS);
-  assert.equal(getProfileJobsRefreshKey(harness.state, "alice"), MAX_EVENTS + 1);
+  assert.equal(
+    getProfileJobsRefreshKey(harness.state, "alice"),
+    baseKey + MAX_EVENTS + 1
+  );
   assert.equal(harness.fetchCount, fetchesAt200 + 1);
   assert.equal(harness.loadedJobs.length, 201);
   assert.equal(harness.loadedJobs.at(-1).title, "Job 201");
@@ -238,17 +242,48 @@ test("Scenario 1: 201st applied event refreshes history even though event buffer
   harness.dispose();
 });
 
-test("Scenario 2: application saved during WebSocket disconnect appears automatically on reconnect without Refresh", () => {
+test("Scenario 2: application saved between initial /jobs fetch and first WebSocket open appears on first open", () => {
   const backendStore = {
     alice: [{ id: 1, title: "Initial Job", status: "applied" }],
   };
   const harness = createDashboardHarness("alice", backendStore);
 
-  // Healthy initial open should not double-fetch on mount
+  // Initial /jobs fetch already completed before the WebSocket opened
+  assert.equal(harness.connected, false);
+  assert.equal(harness.fetchCount, 1);
+  assert.equal(harness.loadedJobs.length, 1);
+
+  // A job is persisted during the window before the first WS onopen (event missed)
+  backendStore.alice.push({
+    id: 2,
+    title: "Saved Before First WS Open",
+    status: "applied",
+  });
+
+  // First successful WS open must advance the refresh signal and re-query /jobs
+  harness.sockets[0].open();
+
+  assert.equal(harness.connected, true);
+  assert.equal(harness.state.connectionSeq, 1);
+  assert.equal(getProfileJobsRefreshKey(harness.state, "alice"), 1);
+  assert.equal(getStatusRefreshKey(harness.state), 1);
+  assert.equal(harness.fetchCount, 2);
+  assert.equal(harness.loadedJobs.length, 2);
+  assert.equal(harness.loadedJobs[1].title, "Saved Before First WS Open");
+
+  harness.dispose();
+});
+
+test("Scenario 3: application saved during WebSocket disconnect appears automatically on reconnect without Refresh", () => {
+  const backendStore = {
+    alice: [{ id: 1, title: "Initial Job", status: "applied" }],
+  };
+  const harness = createDashboardHarness("alice", backendStore);
+
   harness.sockets[0].open();
   assert.equal(harness.connected, true);
-  assert.equal(harness.state.reconnectSeq, 0);
-  assert.equal(harness.fetchCount, 1);
+  assert.equal(harness.state.connectionSeq, 1);
+  const fetchesAfterFirstOpen = harness.fetchCount;
 
   // Socket drops; a new application is persisted while disconnected (no WS event emitted)
   harness.sockets[0].drop();
@@ -265,17 +300,17 @@ test("Scenario 2: application saved during WebSocket disconnect appears automati
   harness.sockets[1].open();
 
   assert.equal(harness.connected, true);
-  assert.equal(harness.state.reconnectSeq, 1);
-  assert.equal(getProfileJobsRefreshKey(harness.state, "alice"), 1);
-  assert.equal(getStatusRefreshKey(harness.state), 1);
-  assert.equal(harness.fetchCount, 2);
+  assert.equal(harness.state.connectionSeq, 2);
+  assert.equal(getProfileJobsRefreshKey(harness.state, "alice"), 2);
+  assert.equal(getStatusRefreshKey(harness.state), 2);
+  assert.equal(harness.fetchCount, fetchesAfterFirstOpen + 1);
   assert.equal(harness.loadedJobs.length, 2);
   assert.equal(harness.loadedJobs[1].title, "Saved While Offline");
 
   harness.dispose();
 });
 
-test("Scenario 2b: failed initial connection followed by successful retry also refreshes history", () => {
+test("Scenario 3b: failed initial connection followed by successful retry also refreshes history", () => {
   const backendStore = { alice: [] };
   const harness = createDashboardHarness("alice", backendStore);
 
@@ -290,7 +325,7 @@ test("Scenario 2b: failed initial connection followed by successful retry also r
   harness.flushNextTimer();
   harness.sockets[1].open();
 
-  assert.equal(harness.state.reconnectSeq, 1);
+  assert.equal(harness.state.connectionSeq, 1);
   assert.equal(harness.fetchCount, 2);
   assert.equal(harness.loadedJobs.length, 1);
   assert.equal(harness.loadedJobs[0].title, "Saved During Startup Retry");
@@ -298,7 +333,7 @@ test("Scenario 2b: failed initial connection followed by successful retry also r
   harness.dispose();
 });
 
-test("Scenario 3: events for another profile do not refresh the active profile's history", () => {
+test("Scenario 4: events for another profile do not refresh the active profile's history", () => {
   const backendStore = {
     alice: [{ id: 1, title: "Alice Role", status: "applied" }],
     bob: [],
@@ -342,9 +377,55 @@ test("Scenario 3: events for another profile do not refresh the active profile's
 
   assert.equal(getProfileJobsRefreshKey(harness.state, "alice"), initialKey);
   assert.equal(harness.fetchCount, initialFetches);
-  assert.equal(getProfileJobsRefreshKey(harness.state, "bob"), 4);
+  assert.equal(getProfileJobsRefreshKey(harness.state, "bob"), initialKey + 4);
 
   harness.dispose();
+});
+
+test("Scenario 5: Object.prototype property names (constructor, toString, __proto__) stay numeric and isolated", () => {
+  const specialNames = ["constructor", "toString", "__proto__", "hasOwnProperty"];
+  let state = createInitialFeedState();
+
+  for (const name of specialNames) {
+    const initialKey = getProfileJobsRefreshKey(state, name);
+    assert.equal(typeof initialKey, "number");
+    assert.equal(initialKey, 0);
+  }
+
+  state = applyFeedEvent(state, {
+    event: "applied",
+    title: "Role A",
+    company: "Acme",
+    url: "https://example.com/a",
+    score: 90,
+    profile: "constructor",
+    timestamp: "2026-11-23T22:00:00+00:00",
+  });
+
+  state = applyFeedEvent(state, {
+    event: "applied",
+    title: "Role B",
+    company: "Beta",
+    url: "https://example.com/b",
+    score: 80,
+    profile: "toString",
+    timestamp: "2026-11-23T22:01:00+00:00",
+  });
+
+  state = applyFeedEvent(state, {
+    event: "applied",
+    title: "Role C",
+    company: "Gamma",
+    url: "https://example.com/c",
+    score: 85,
+    profile: "constructor",
+    timestamp: "2026-11-23T22:02:00+00:00",
+  });
+
+  assert.strictEqual(getProfileJobsRefreshKey(state, "constructor"), 2);
+  assert.strictEqual(getProfileJobsRefreshKey(state, "toString"), 1);
+  assert.strictEqual(getProfileJobsRefreshKey(state, "__proto__"), 0);
+  assert.strictEqual(getProfileJobsRefreshKey(state, "hasOwnProperty"), 0);
 });
 
 test("clearFeedEvents clears visual buffer without resetting monotonic refresh counters", () => {
@@ -358,7 +439,7 @@ test("clearFeedEvents clears visual buffer without resetting monotonic refresh c
     profile: "alice",
     timestamp: "2026-11-23T22:00:00+00:00",
   });
-  state = applyFeedReconnect(state);
+  state = applyFeedConnect(state);
 
   const cleared = clearFeedEvents(state);
   assert.equal(cleared.events.length, 0);

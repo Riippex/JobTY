@@ -6,8 +6,8 @@ import {
   type AgentEvent,
   type FeedSyncState,
   type WsEnvelope,
+  applyFeedConnect,
   applyFeedEvent,
-  applyFeedReconnect,
   clearFeedEvents,
   connectAgentFeedSocket,
   createInitialFeedState,
@@ -25,7 +25,7 @@ export interface UseAgentFeedResult {
   clearEvents: () => void;
   jobsRefreshKey: number;
   statusRefreshKey: number;
-  reconnectSeq: number;
+  connectionSeq: number;
 }
 
 export function useAgentFeed(
@@ -39,8 +39,8 @@ export function useAgentFeed(
       url: buildWebSocketUrl(WS_URL),
       createSocket: (url) => new WebSocket(url),
       onConnectionChange: setIsConnected,
-      onReconnect: () => {
-        setFeedState((prev) => applyFeedReconnect(prev));
+      onConnect: () => {
+        setFeedState((prev) => applyFeedConnect(prev));
       },
       onEvent: (agentEvent) => {
         setFeedState((prev) => applyFeedEvent(prev, agentEvent));
@@ -61,6 +61,6 @@ export function useAgentFeed(
     clearEvents,
     jobsRefreshKey,
     statusRefreshKey,
-    reconnectSeq: feedState.reconnectSeq,
+    connectionSeq: feedState.connectionSeq,
   };
 }

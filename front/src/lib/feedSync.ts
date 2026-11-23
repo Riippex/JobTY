@@ -82,8 +82,8 @@ export interface FeedSyncState {
   eventSeq: number;
   statusSeq: number;
   globalJobsSeq: number;
-  profileJobsSeq: Record<string, number>;
-  reconnectSeq: number;
+  profileJobsSeq: ReadonlyMap<string, number>;
+  connectionSeq: number;
 }
 
 export type WebSocketLike = Pick<
@@ -95,7 +95,7 @@ export interface FeedSocketControllerOptions {
   url: string;
   createSocket: (url: string) => WebSocketLike;
   onConnectionChange: (connected: boolean) => void;
-  onReconnect: () => void;
+  onConnect: () => void;
   onEvent: (event: AgentEvent) => void;
   maxRetries?: number;
   scheduleTimer?: (fn: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
@@ -268,8 +268,8 @@ export function createInitialFeedState(): FeedSyncState {
     eventSeq: 0,
     statusSeq: 0,
     globalJobsSeq: 0,
-    profileJobsSeq: {},
-    reconnectSeq: 0,
+    profileJobsSeq: new Map<string, number>(),
+    connectionSeq: 0,
   };
 }
 
@@ -298,10 +298,9 @@ export function applyFeedEvent(
     if (ev.profile === null) {
       globalJobsSeq += 1;
     } else {
-      profileJobsSeq = {
-        ...state.profileJobsSeq,
-        [ev.profile]: (state.profileJobsSeq[ev.profile] ?? 0) + 1,
-      };
+      const nextMap = new Map(state.profileJobsSeq);
+      nextMap.set(ev.profile, (nextMap.get(ev.profile) ?? 0) + 1);
+      profileJobsSeq = nextMap;
     }
   }
 
@@ -311,14 +310,14 @@ export function applyFeedEvent(
     statusSeq: ev.event === "status" ? state.statusSeq + 1 : state.statusSeq,
     globalJobsSeq,
     profileJobsSeq,
-    reconnectSeq: state.reconnectSeq,
+    connectionSeq: state.connectionSeq,
   };
 }
 
-export function applyFeedReconnect(state: FeedSyncState): FeedSyncState {
+export function applyFeedConnect(state: FeedSyncState): FeedSyncState {
   return {
     ...state,
-    reconnectSeq: state.reconnectSeq + 1,
+    connectionSeq: state.connectionSeq + 1,
   };
 }
 
@@ -336,14 +335,14 @@ export function getProfileJobsRefreshKey(
 ): number {
   if (!activeProfileName) return 0;
   return (
-    (state.profileJobsSeq[activeProfileName] ?? 0) +
+    (state.profileJobsSeq.get(activeProfileName) ?? 0) +
     state.globalJobsSeq +
-    state.reconnectSeq
+    state.connectionSeq
   );
 }
 
 export function getStatusRefreshKey(state: FeedSyncState): number {
-  return state.statusSeq + state.reconnectSeq;
+  return state.statusSeq + state.connectionSeq;
 }
 
 export function connectAgentFeedSocket(
@@ -354,7 +353,6 @@ export function connectAgentFeedSocket(
   const cancelTimer = options.cancelTimer ?? clearTimeout;
 
   let disposed = false;
-  let hasConnectedOnce = false;
   let retries = 0;
   let ws: WebSocketLike | null = null;
   let backoffTimer: ReturnType<typeof setTimeout> | null = null;
@@ -371,13 +369,9 @@ export function connectAgentFeedSocket(
         socket.close();
         return;
       }
-      const isReconnect = hasConnectedOnce || retries > 0;
-      hasConnectedOnce = true;
       retries = 0;
       options.onConnectionChange(true);
-      if (isReconnect) {
-        options.onReconnect();
-      }
+      options.onConnect();
     };
 
     socket.onmessage = (evt) => {
